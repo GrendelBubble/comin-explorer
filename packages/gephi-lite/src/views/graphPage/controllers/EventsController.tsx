@@ -5,6 +5,7 @@ import { FC, useEffect, useRef } from "react";
 import { Coordinates, MouseCoords } from "sigma/types";
 
 import {
+  useGraphDataset,
   useGraphDatasetActions,
   useSelection,
   useSelectionActions,
@@ -13,6 +14,7 @@ import {
 import { EVENTS, useEventsContext } from "../../../core/context/eventsContext";
 import { GephiLiteSigma } from "../../../core/graph/types";
 import { LayoutMapping } from "../../../core/layouts/types";
+import { fetchCominContextUnitsGraph } from "../../../core/comin/api";
 import { bindUpHandler } from "../../../utils/events";
 
 const DRAG_EVENTS_TOLERANCE = 3;
@@ -23,7 +25,8 @@ export const EventsController: FC = () => {
   const { emitter: globalEmitter } = useEventsContext();
 
   const selection = useSelection();
-  const { setNodePositions } = useGraphDatasetActions();
+  const graphDataset = useGraphDataset();
+  const { createNode, createEdge, setNodePositions } = useGraphDatasetActions();
   const { select, toggle, emptySelection } = useSelectionActions();
   const { setHoveredNode, resetHoveredNode, setHoveredEdge, resetHoveredEdge } = useSigmaActions();
 
@@ -36,6 +39,7 @@ export const EventsController: FC = () => {
       }
   >({ type: "idle" });
   const dragEventsCountRef = useRef(0);
+  const expandedThemesRef = useRef(new Set<string>());
 
   /**
    * Handle interaction events:
@@ -58,7 +62,7 @@ export const EventsController: FC = () => {
         if (dragStateRef.current.type !== "idle") return;
         resetHoveredNode();
       },
-      clickNode({ node, event }) {
+      async clickNode({ node, event }) {
         if (dragEventsCountRef.current >= DRAG_EVENTS_TOLERANCE) return;
 
         if (event.original.ctrlKey) {
@@ -66,12 +70,68 @@ export const EventsController: FC = () => {
             type: "nodes",
             item: node,
           });
-        } else if (selection.type === "nodes" && selection.items.has(node) && selection.items.size === 1) {
+        } else if (
+          selection.type === "nodes" &&
+          selection.items.has(node) &&
+          selection.items.size === 1
+        ) {
           emptySelection();
         } else {
           select({ type: "nodes", items: new Set([node]), replace: true });
         }
+
+        if (event.original.ctrlKey) return;
+
+        const nodeData = graphDataset.nodeData[node];
+        if (nodeData?.type !== "context") return;
+
+        const themeId = nodeData.theme_id;
+        if (typeof themeId !== "string") return;
+        if (expandedThemesRef.current.has(themeId)) return;
+
+        expandedThemesRef.current.add(themeId);
+
+        try {
+          const unitGraph = await fetchCominContextUnitsGraph(themeId);
+          const center = sigma.getGraph().getNodeAttributes(node);
+
+          const units = unitGraph.nodes.filter(
+            (item) => item.type === "context_unit",
+          );
+
+          units.forEach((unit, index) => {
+            if (graphDataset.fullGraph.hasNode(unit.id)) return;
+
+            const angle =
+              (2 * Math.PI * index) / Math.max(units.length, 1);
+            const radius = 20;
+
+            createNode(unit.id, {
+              ...unit,
+              x: center.x + Math.cos(angle) * radius,
+              y: center.y + Math.sin(angle) * radius,
+            });
+
+            const edge = unitGraph.edges.find(
+              (candidate) => candidate.target === unit.id,
+            );
+
+            if (edge && !graphDataset.fullGraph.hasEdge(edge.id)) {
+              createEdge(
+                edge.id,
+                { type: edge.type },
+                edge.source,
+                edge.target,
+                false,
+              );
+            }
+          });
+        } catch (error) {
+          expandedThemesRef.current.delete(themeId);
+          throw error;
+        }
       },
+
       clickEdge({ edge, event }) {
         if (event.original.ctrlKey) {
           toggle({
@@ -167,7 +227,10 @@ export const EventsController: FC = () => {
     };
   }, [
     registerEvents,
+    createEdge,
+    createNode,
     emptySelection,
+    graphDataset,
     resetHoveredEdge,
     resetHoveredNode,
     select,
