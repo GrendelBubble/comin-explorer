@@ -7,13 +7,15 @@ import { WelcomeModal } from "../components/modals/WelcomeModal";
 import { I18n } from "../locales/provider";
 import { sessionStorage } from "../utils/storage";
 import { extractFilename } from "../utils/url";
-import { appearanceAtom } from "./appearance";
+import { appearanceActions, appearanceAtom } from "./appearance";
+import { fetchCominContextGraph } from "./comin/api";
 import { useBroadcast } from "./broadcast/useBroadcast";
 import { useFileActions, useGraphDataset, useGraphDatasetActions } from "./context/dataContexts";
 import { filtersAtom } from "./filters";
 import { parseFiltersState } from "./filters/utils";
 import { graphDatasetAtom } from "./graph";
-import { parseDataset } from "./graph/utils";
+import { initializeGraphDataset, parseDataset } from "./graph/utils";
+import { inferAppearanceState } from "./appearance/utils";
 import { useModal } from "./modals";
 import { useNotifications } from "./notifications";
 import { preferencesAtom } from "./preferences";
@@ -89,6 +91,27 @@ export const Initialize: FC<PropsWithChildren<unknown>> = ({ children }) => {
     const url = new URL(window.location.href);
     const broadcastID = url.searchParams.get("broadcast");
     setBroadcastID(broadcastID);
+
+    // If query params has comin
+    // => load the Com'In context graph from the API
+    if (url.searchParams.has("comin")) {
+      const graph = await fetchCominContextGraph();
+
+      resetGraph();
+      const dataset = initializeGraphDataset(graph);
+      graphDatasetAtom.set(dataset);
+
+      const inferredAppearance = inferAppearanceState(dataset);
+      appearanceActions.mergeState(inferredAppearance);
+
+      resetCamera({ forceRefresh: true });
+
+      graphFound = true;
+      showWelcomeModal = false;
+
+      url.searchParams.delete("comin");
+      window.history.pushState({}, "", url);
+    }
 
     // If query params has new
     // => empty graph & open welcome modal

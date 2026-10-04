@@ -50,6 +50,24 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/_github/, ""),
       },
+      "/comin-api": {
+        target: "https://srv653062.hstgr.cloud",
+        changeOrigin: true,
+        rewrite: (path) =>
+          path.replace(
+            /^\/comin-api/,
+            "/communaute-integrale/wp-json/comin/v1",
+          ),
+        configure: (proxy) => {
+          proxy.on("proxyReq", (proxyReq) => {
+            const apiKey = process.env.COMIN_API_KEY;
+
+            if (apiKey) {
+              proxyReq.setHeader("X-ComIn-API-Key", apiKey);
+            }
+          });
+        },
+      },
     },
   },
 });
