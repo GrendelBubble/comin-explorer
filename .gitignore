@@ -30,3 +30,6 @@ playwright-report/
 playwright/.cache/
 tsconfig.tsbuildinfo
 **/__screenshots__
+.vercel
+.env.local
+.env.*.local
