@@ -24,7 +24,7 @@ export const AppearanceController: FC = () => {
   const sigma: GephiLiteSigma = useSigma();
   const selection = useSelection();
   const { showEdges } = useAppearance();
-  const { fullGraph } = useGraphDataset();
+  const { fullGraph, nodeData } = useGraphDataset();
   const { theme } = usePreferences();
   const { emphasizedNodes, emphasizedEdges, hoveredNode, highlightedNodes } = useSigmaState();
 
@@ -32,6 +32,11 @@ export const AppearanceController: FC = () => {
   useEffect(() => {
     const graph = sigma.getGraph();
     const mode = getAppliedTheme(theme);
+    const isCominGraph = Object.values(nodeData).some(
+      (data) =>
+        data?.type === "context" ||
+        data?.type === "context_unit",
+    );
 
     // what we've got in the state,
     //  or
@@ -87,6 +92,11 @@ export const AppearanceController: FC = () => {
         res.zIndex = 1;
       }
 
+      if (isCominGraph && hoveredNode && id !== hoveredNode) {
+        res.hideLabel = true;
+        res.forceLabel = false;
+      }
+
       return res;
     });
     sigma.setSetting(
@@ -123,6 +133,7 @@ export const AppearanceController: FC = () => {
     highlightedNodes,
     theme,
     fullGraph.type,
+    nodeData,
   ]);
 
   return null;
