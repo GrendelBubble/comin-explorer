@@ -1,4 +1,3 @@
-import { parseAppearanceState } from "@gephi/gephi-lite-sdk";
 import { FC, PropsWithChildren, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import useKonami from "react-use-konami";
@@ -7,14 +6,12 @@ import { WelcomeModal } from "../components/modals/WelcomeModal";
 import { I18n } from "../locales/provider";
 import { sessionStorage } from "../utils/storage";
 import { extractFilename } from "../utils/url";
-import { appearanceActions, appearanceAtom } from "./appearance";
+import { appearanceActions } from "./appearance";
 import { fetchCominContextGraph } from "./comin/api";
 import { useBroadcast } from "./broadcast/useBroadcast";
 import { useFileActions, useGraphDataset, useGraphDatasetActions } from "./context/dataContexts";
-import { filtersAtom } from "./filters";
-import { parseFiltersState } from "./filters/utils";
 import { graphDatasetAtom } from "./graph";
-import { initializeGraphDataset, parseDataset } from "./graph/utils";
+import { initializeGraphDataset } from "./graph/utils";
 import { inferAppearanceState } from "./appearance/utils";
 import { useModal } from "./modals";
 import { useNotifications } from "./notifications";
@@ -92,27 +89,6 @@ export const Initialize: FC<PropsWithChildren<unknown>> = ({ children }) => {
     const broadcastID = url.searchParams.get("broadcast");
     setBroadcastID(broadcastID);
 
-    // If query params has comin
-    // => load the Com'In context graph from the API
-    if (url.searchParams.has("comin")) {
-      const graph = await fetchCominContextGraph();
-
-      resetGraph();
-      const dataset = initializeGraphDataset(graph);
-      graphDatasetAtom.set(dataset);
-
-      const inferredAppearance = inferAppearanceState(dataset);
-      appearanceActions.mergeState(inferredAppearance);
-
-      resetCamera({ forceRefresh: true });
-
-      graphFound = true;
-      showWelcomeModal = false;
-
-      url.searchParams.delete("comin");
-      window.history.pushState({}, "", url);
-    }
-
     // If query params has new
     // => empty graph & open welcome modal
     if (url.searchParams.has("new") || broadcastID) {
@@ -152,26 +128,26 @@ export const Initialize: FC<PropsWithChildren<unknown>> = ({ children }) => {
       }
     }
 
+    // Load Com'In by default when no explicit Gephi Lite graph mode was requested.
+    // The ?comin parameter remains supported as an explicit alias.
     if (!graphFound) {
-      // Load data from session storage
-      const rawDataset = sessionStorage.getItem("dataset");
-      const rawFilters = sessionStorage.getItem("filters");
-      const rawAppearance = sessionStorage.getItem("appearance");
+      const graph = await fetchCominContextGraph();
 
-      if (rawDataset) {
-        const dataset = parseDataset(rawDataset);
+      resetGraph();
+      const dataset = initializeGraphDataset(graph);
+      graphDatasetAtom.set(dataset);
 
-        if (dataset) {
-          const appearance = rawAppearance ? parseAppearanceState(rawAppearance) : null;
-          const filters = rawFilters ? parseFiltersState(rawFilters) : null;
+      const inferredAppearance = inferAppearanceState(dataset);
+      appearanceActions.mergeState(inferredAppearance);
 
-          graphDatasetAtom.set(dataset);
-          filtersAtom.set((prev) => filters || prev);
-          appearanceAtom.set((prev) => appearance || prev);
-          resetCamera({ forceRefresh: true });
+      resetCamera({ forceRefresh: true });
 
-          if (dataset.fullGraph.order > 0) showWelcomeModal = false;
-        }
+      graphFound = true;
+      showWelcomeModal = false;
+
+      if (url.searchParams.has("comin")) {
+        url.searchParams.delete("comin");
+        window.history.pushState({}, "", url);
       }
     }
 
