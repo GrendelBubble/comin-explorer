@@ -1,0 +1,10 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "packages/gephi-lite/build",
+  "rewrites": [
+    {
+      "source": "/comin-api/graph/contexts",
+      "destination": "/api/comin/graph/contexts"
+    }
+  ]
+}
