@@ -5,6 +5,10 @@
     {
       "source": "/comin-api/graph/contexts",
       "destination": "/api/comin/graph/contexts"
+    },
+    {
+      "source": "/comin-api/graph/contexts/:theme_id/units",
+      "destination": "/api/comin/graph/contexts/:theme_id/units"
     }
   ]
 }
