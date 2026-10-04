@@ -26,7 +26,7 @@ export const EventsController: FC = () => {
 
   const selection = useSelection();
   const graphDataset = useGraphDataset();
-  const { createNode, createEdge, setNodePositions } = useGraphDatasetActions();
+  const { createNode, createEdge, deleteItems, setNodePositions } = useGraphDatasetActions();
   const { select, toggle, emptySelection } = useSelectionActions();
   const { setHoveredNode, resetHoveredNode, setHoveredEdge, resetHoveredEdge } = useSigmaActions();
 
@@ -87,7 +87,31 @@ export const EventsController: FC = () => {
 
         const themeId = nodeData.theme_id;
         if (typeof themeId !== "string") return;
-        if (expandedThemesRef.current.has(themeId)) return;
+        if (expandedThemesRef.current.has(themeId)) {
+          const unitIds = Object.entries(graphDataset.nodeData)
+            .filter(
+              ([, data]) =>
+                data?.type === "context_unit" &&
+                data?.theme_id === themeId,
+            )
+            .map(([id]) => id);
+
+          const edgeIds = Array.from(
+            new Set(
+              unitIds.flatMap((unitId) =>
+                graphDataset.fullGraph.hasNode(unitId)
+                  ? graphDataset.fullGraph.edges(unitId)
+                  : [],
+              ),
+            ),
+          );
+
+          if (edgeIds.length) deleteItems("edges", edgeIds);
+          if (unitIds.length) deleteItems("nodes", unitIds);
+
+          expandedThemesRef.current.delete(themeId);
+          return;
+        }
 
         expandedThemesRef.current.add(themeId);
 
@@ -102,9 +126,16 @@ export const EventsController: FC = () => {
           units.forEach((unit, index) => {
             if (graphDataset.fullGraph.hasNode(unit.id)) return;
 
+            const unitsPerRing = 12;
+            const ringIndex = Math.floor(index / unitsPerRing);
+            const indexInRing = index % unitsPerRing;
+            const itemsInRing = Math.min(
+              unitsPerRing,
+              units.length - ringIndex * unitsPerRing,
+            );
             const angle =
-              (2 * Math.PI * index) / Math.max(units.length, 1);
-            const radius = 20;
+              (2 * Math.PI * indexInRing) / Math.max(itemsInRing, 1);
+            const radius = 80 + ringIndex * 70;
 
             createNode(unit.id, {
               ...unit,
@@ -229,6 +260,7 @@ export const EventsController: FC = () => {
     registerEvents,
     createEdge,
     createNode,
+    deleteItems,
     emptySelection,
     graphDataset,
     resetHoveredEdge,
