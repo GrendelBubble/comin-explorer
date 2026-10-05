@@ -76,7 +76,11 @@ export function cominContextGraphToGraph(data: CominContextGraphResponse): Graph
 
   const labelLanes = new Map<
     string,
-    { index: number; count: number }
+    {
+      index: number;
+      count: number;
+      minSinGap: number;
+    }
   >();
 
   (["left", "right"] as const).forEach((side) => {
@@ -88,10 +92,25 @@ export function cominContextGraphToGraph(data: CominContextGraphResponse): Graph
       // ordre visuel du haut vers le bas
       .sort((a, b) => b.sin - a.sin);
 
+    const minSinGap =
+      sideContexts.length > 1
+        ? Math.min(
+            ...sideContexts
+              .slice(1)
+              .map((item, index) =>
+                Math.abs(
+                  sideContexts[index].sin -
+                    item.sin,
+                ),
+              ),
+          )
+        : 1;
+
     sideContexts.forEach(({ node }, index) => {
       labelLanes.set(node.id, {
         index,
         count: sideContexts.length,
+        minSinGap,
       });
     });
   });
@@ -113,6 +132,8 @@ export function cominContextGraphToGraph(data: CominContextGraphResponse): Graph
         cominLabelPlacement,
         cominLabelLaneIndex: lane?.index ?? 0,
         cominLabelLaneCount: lane?.count ?? 1,
+        cominLabelLaneMinSinGap:
+          lane?.minSinGap ?? 1,
         x: cos * radius,
         y: sin * radius,
       });

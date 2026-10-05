@@ -82,6 +82,7 @@ export const AppearanceController: FC = () => {
           | "bottom";
         cominLabelLaneIndex?: number;
         cominLabelLaneCount?: number;
+        cominLabelLaneMinSinGap?: number;
       };
 
       const cominNodeData = nodeData[id] as
@@ -94,6 +95,7 @@ export const AppearanceController: FC = () => {
               | "bottom";
             cominLabelLaneIndex?: number;
             cominLabelLaneCount?: number;
+            cominLabelLaneMinSinGap?: number;
           }
         | undefined;
 
@@ -108,6 +110,9 @@ export const AppearanceController: FC = () => {
 
       res.cominLabelLaneCount =
         cominNodeData?.cominLabelLaneCount;
+
+      res.cominLabelLaneMinSinGap =
+        cominNodeData?.cominLabelLaneMinSinGap;
 
       const isExpandedContext =
         nodeData[id]?.type === "context" &&
