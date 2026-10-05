@@ -4,6 +4,7 @@ import {
   CominContextGraphResponse,
   cominContextGraphToGraph,
 } from "./contextGraph";
+import { CominContextPostsGraphResponse } from "./contextPostsGraph";
 import { CominContextUnitsGraphResponse } from "./contextUnitsGraph";
 
 const CONTEXT_GRAPH_ENDPOINT = "/comin-api/graph/contexts";
@@ -62,6 +63,40 @@ export async function fetchCominContextUnitsGraph(
     !Array.isArray(data.edges)
   ) {
     throw new Error("Invalid Com'In context units graph response");
+  }
+
+  return data;
+}
+
+
+export async function fetchCominContextPostsGraph(
+  themeId: string,
+): Promise<CominContextPostsGraphResponse> {
+  const response = await fetch(
+    `/comin-api/graph/contexts/${encodeURIComponent(themeId)}/posts`,
+    {
+      headers: {
+        Accept: "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Com'In context posts request failed: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const data = (await response.json()) as CominContextPostsGraphResponse;
+
+  if (
+    data.status !== "ok" ||
+    data.graph_version !== "context-posts-graph-v1" ||
+    data.theme_id !== themeId ||
+    !Array.isArray(data.nodes) ||
+    !Array.isArray(data.edges)
+  ) {
+    throw new Error("Invalid Com'In context posts graph response");
   }
 
   return data;
