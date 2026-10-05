@@ -59,21 +59,18 @@ const drawWrappedDiscNodeLabel: NodeLabelDrawingFunction = (
   const centeredOffset =
     ((lines.length - 1) * lineHeight) / 2;
 
-  let placement: "left" | "right" | "top" | "bottom" =
-    "right";
-
-  if (radial) {
-    const dx =
-      data.x - context.canvas.width / 2;
-    const dy =
-      data.y - context.canvas.height / 2;
-
-    if (Math.abs(dx) >= Math.abs(dy)) {
-      placement = dx >= 0 ? "right" : "left";
-    } else {
-      placement = dy >= 0 ? "bottom" : "top";
-    }
-  }
+  const placement =
+    radial
+      ? (
+          data as typeof data & {
+            cominLabelPlacement?:
+              | "left"
+              | "right"
+              | "top"
+              | "bottom";
+          }
+        ).cominLabelPlacement || "right"
+      : "right";
 
   const discOffset = data.size + 3;
   const verticalGap = 8;

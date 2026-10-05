@@ -47,14 +47,29 @@ export function cominContextGraphToGraph(data: CominContextGraphResponse): Graph
 
   contexts.forEach((node, index) => {
     const angle = startAngle + index * angleStep;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    let cominLabelPlacement:
+      | "left"
+      | "right"
+      | "top"
+      | "bottom";
+
+    if (Math.abs(cos) >= Math.abs(sin)) {
+      cominLabelPlacement = cos >= 0 ? "right" : "left";
+    } else {
+      cominLabelPlacement = sin >= 0 ? "bottom" : "top";
+    }
 
     graph.addNode(node.id, {
       label: node.label,
       type: node.type,
       theme_id: node.theme_id,
       cominRadialLabel: true,
-      x: Math.cos(angle) * radius,
-      y: Math.sin(angle) * radius,
+      cominLabelPlacement,
+      x: cos * radius,
+      y: sin * radius,
     });
   });
 
