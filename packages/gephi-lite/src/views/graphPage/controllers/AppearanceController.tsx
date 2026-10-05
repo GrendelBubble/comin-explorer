@@ -145,6 +145,7 @@ export const AppearanceController: FC = () => {
 
       if (allEmphasizedNodes.has(id)) {
         res.forceLabel = true;
+        res.hideLabel = false;
         res.zIndex = 1;
       }
 
