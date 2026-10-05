@@ -2,15 +2,11 @@ import { FC } from "react";
 
 import { GraphSearchSelection } from "../../components/GraphSearchSelection";
 import { Layout } from "../layout";
-import { Header } from "../layout/Header";
 import { GraphRendering } from "./GraphRendering";
 
 export const GraphPage: FC = () => {
   return (
-    <>
-      <Header />
-
-      <Layout
+    <Layout
         id="graph-page"
         className="panels-layout"
       >
@@ -24,7 +20,6 @@ export const GraphPage: FC = () => {
         <div className="filler">
           <GraphRendering />
         </div>
-      </Layout>
-    </>
+    </Layout>
   );
 };
