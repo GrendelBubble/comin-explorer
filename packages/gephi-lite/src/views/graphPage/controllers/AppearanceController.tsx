@@ -41,14 +41,6 @@ export const AppearanceController: FC = () => {
         data?.type === "source",
     );
 
-    const overviewLabelNodes = new Set(
-      graph
-        .nodes()
-        .filter((id) => nodeData[id]?.type === "context")
-        .sort((a, b) => graph.degree(b) - graph.degree(a))
-        .slice(0, 6),
-    );
-
     // what we've got in the state,
     //  or
     //    the node selection,
@@ -124,8 +116,9 @@ export const AppearanceController: FC = () => {
             } else {
               res.hideLabel = true;
             }
-          } else if (!overviewLabelNodes.has(id)) {
-            res.hideLabel = true;
+          } else {
+            res.forceLabel = true;
+            res.hideLabel = false;
           }
         }
       }

@@ -22,8 +22,8 @@ export const COMIN_UI = {
 
   edges: {
     related: {
-      color: "#C8CDD0",
-      size: 0.7,
+      color: "#DDDCD8",
+      size: 0.35,
     },
     supportedByPost: {
       color: "#B8A99C",
