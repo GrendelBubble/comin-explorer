@@ -26,8 +26,8 @@ export const COMIN_UI = {
       size: 0.05,
     },
     supportedByPost: {
-      color: "#B8A99C",
-      size: 1.2,
+      color: "#C9BEB4",
+      size: 0.4,
     },
   },
 } as const;

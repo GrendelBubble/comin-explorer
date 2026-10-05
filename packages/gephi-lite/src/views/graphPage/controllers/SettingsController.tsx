@@ -271,7 +271,7 @@ export const SettingsController: FC<{ setIsReady: () => void }> = ({ setIsReady 
     if (isCominGraph) {
       sigma.setSetting("labelRenderedSizeThreshold", 0);
       sigma.setSetting("labelDensity", 0.65);
-      sigma.setSetting("labelGridCellSize", 140);
+      sigma.setSetting("labelGridCellSize", 220);
     } else {
       const labelDensity =
         labelThreshold === 0

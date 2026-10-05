@@ -25,7 +25,7 @@ export const AppearanceController: FC = () => {
   const sigma: GephiLiteSigma = useSigma();
   const selection = useSelection();
   const { showEdges } = useAppearance();
-  const { fullGraph, nodeData } = useGraphDataset();
+  const { fullGraph, nodeData, edgeData } = useGraphDataset();
   const { theme } = usePreferences();
   const { emphasizedNodes, emphasizedEdges, hoveredNode, highlightedNodes } = useSigmaState();
 
@@ -157,7 +157,7 @@ export const AppearanceController: FC = () => {
               res.hideLabel = true;
             }
           } else {
-            res.forceLabel = true;
+            res.forceLabel = false;
             res.hideLabel = false;
           }
         }
@@ -205,10 +205,12 @@ export const AppearanceController: FC = () => {
               type: graph.isDirected(id) ? "arrow" : "line",
             } as Partial<CustomEdgeDisplayData>;
             if (isCominGraph) {
-              if (attr.type === "related") {
+              const edgeType = edgeData[id]?.type;
+
+              if (edgeType === "related") {
                 res.color = COMIN_UI.edges.related.color;
                 res.size = COMIN_UI.edges.related.size;
-              } else if (attr.type === "supported_by_post") {
+              } else if (edgeType === "supported_by_post") {
                 res.color = COMIN_UI.edges.supportedByPost.color;
                 res.size = COMIN_UI.edges.supportedByPost.size;
               }
@@ -239,6 +241,7 @@ export const AppearanceController: FC = () => {
     theme,
     fullGraph.type,
     nodeData,
+    edgeData,
   ]);
 
   return null;
