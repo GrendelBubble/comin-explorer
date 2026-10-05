@@ -23,11 +23,11 @@ export const COMIN_UI = {
   edges: {
     related: {
       color: "#D9D7D2",
-      size: 0.12,
+      size: 2,
     },
     supportedByPost: {
       color: "#BFAFA3",
-      size: 0.65,
+      size: 2,
     },
   },
 } as const;

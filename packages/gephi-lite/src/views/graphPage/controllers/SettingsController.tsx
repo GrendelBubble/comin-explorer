@@ -198,6 +198,32 @@ export const SettingsController: FC<{ setIsReady: () => void }> = ({ setIsReady 
   const initialCameraReadyRef = useRef(false);
 
   useEffect(() => {
+    const camera = sigma.getCamera();
+    let frame: number | null = null;
+
+    const refreshLabels = () => {
+      if (frame !== null) {
+        cancelAnimationFrame(frame);
+      }
+
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        sigma.refresh();
+      });
+    };
+
+    camera.on("updated", refreshLabels);
+
+    return () => {
+      camera.off("updated", refreshLabels);
+
+      if (frame !== null) {
+        cancelAnimationFrame(frame);
+      }
+    };
+  }, [sigma]);
+
+  useEffect(() => {
     sigmaAtom.set(sigma);
 
     if (initialCameraReadyRef.current) return;

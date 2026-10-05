@@ -182,7 +182,7 @@ export const GraphRendering: FC = () => {
         graph={sigmaGraph}
         settings={{
           ...sigmaSettings,
-          minEdgeThickness: isCominGraph ? 0.07 : 0.3,
+          minEdgeThickness: 0.3,
         }}
       >
         <EventsController />
