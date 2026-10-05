@@ -49,9 +49,19 @@ const drawWrappedDiscNodeLabel: NodeLabelDrawingFunction = (
 
   context.restore();
 
+  const cominData = data as typeof data & {
+    cominRadialLabel?: boolean;
+    cominLabelPlacement?:
+      | "left"
+      | "right"
+      | "top"
+      | "bottom";
+    cominLabelLaneIndex?: number;
+    cominLabelLaneCount?: number;
+  };
+
   const radial =
-    (data as typeof data & { cominRadialLabel?: boolean })
-      .cominRadialLabel === true;
+    cominData.cominRadialLabel === true;
 
   const lineHeight =
     settings.labelSize * COMIN_LABEL_LINE_HEIGHT;
@@ -61,16 +71,14 @@ const drawWrappedDiscNodeLabel: NodeLabelDrawingFunction = (
 
   const placement =
     radial
-      ? (
-          data as typeof data & {
-            cominLabelPlacement?:
-              | "left"
-              | "right"
-              | "top"
-              | "bottom";
-          }
-        ).cominLabelPlacement || "right"
+      ? cominData.cominLabelPlacement || "right"
       : "right";
+
+  const laneIndex =
+    cominData.cominLabelLaneIndex ?? 0;
+
+  const laneCount =
+    cominData.cominLabelLaneCount ?? 1;
 
   const discOffset = data.size + 3;
   const verticalGap = 8;
@@ -83,6 +91,33 @@ const drawWrappedDiscNodeLabel: NodeLabelDrawingFunction = (
       data.y -
       centeredOffset +
       index * lineHeight;
+
+    // Les titres latéraux utilisent des couloirs verticaux
+    // stables pour éviter les collisions.
+    if (
+      (placement === "left" ||
+        placement === "right") &&
+      laneCount > 1
+    ) {
+      const laneMargin = Math.max(
+        90,
+        context.canvas.height * 0.16,
+      );
+
+      const usableHeight =
+        context.canvas.height -
+        2 * laneMargin;
+
+      const laneY =
+        laneMargin +
+        (laneIndex / (laneCount - 1)) *
+          usableHeight;
+
+      y =
+        laneY -
+        centeredOffset +
+        index * lineHeight;
+    }
 
     if (placement === "left") {
       x =
@@ -155,7 +190,7 @@ export const SettingsController: FC<{ setIsReady: () => void }> = ({ setIsReady 
 
     resetCamera({
       forceRefresh: true,
-      padding: isCominGraph ? 0.16 : 0,
+      padding: isCominGraph ? 0.28 : 0,
     });
 
     initialCameraReadyRef.current = true;

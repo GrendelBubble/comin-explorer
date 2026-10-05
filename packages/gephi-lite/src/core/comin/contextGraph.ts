@@ -45,33 +45,79 @@ export function cominContextGraphToGraph(data: CominContextGraphResponse): Graph
   const angleStep =
     (2 * Math.PI) / Math.max(contextCount, 1);
 
-  contexts.forEach((node, index) => {
+  type CominLabelPlacement =
+    | "left"
+    | "right"
+    | "top"
+    | "bottom";
+
+  const positionedContexts = contexts.map((node, index) => {
     const angle = startAngle + index * angleStep;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
 
-    let cominLabelPlacement:
-      | "left"
-      | "right"
-      | "top"
-      | "bottom";
+    let cominLabelPlacement: CominLabelPlacement;
 
-    if (Math.abs(cos) >= Math.abs(sin)) {
-      cominLabelPlacement = cos >= 0 ? "right" : "left";
-    } else {
+    // Réserver top/bottom uniquement aux nœuds réellement
+    // proches de l'axe vertical.
+    if (Math.abs(sin) >= 0.97) {
       cominLabelPlacement = sin >= 0 ? "top" : "bottom";
+    } else {
+      cominLabelPlacement = cos >= 0 ? "right" : "left";
     }
 
-    graph.addNode(node.id, {
-      label: node.label,
-      type: node.type,
-      theme_id: node.theme_id,
-      cominRadialLabel: true,
+    return {
+      node,
+      cos,
+      sin,
       cominLabelPlacement,
-      x: cos * radius,
-      y: sin * radius,
+    };
+  });
+
+  const labelLanes = new Map<
+    string,
+    { index: number; count: number }
+  >();
+
+  (["left", "right"] as const).forEach((side) => {
+    const sideContexts = positionedContexts
+      .filter(
+        ({ cominLabelPlacement }) =>
+          cominLabelPlacement === side,
+      )
+      // ordre visuel du haut vers le bas
+      .sort((a, b) => b.sin - a.sin);
+
+    sideContexts.forEach(({ node }, index) => {
+      labelLanes.set(node.id, {
+        index,
+        count: sideContexts.length,
+      });
     });
   });
+
+  positionedContexts.forEach(
+    ({
+      node,
+      cos,
+      sin,
+      cominLabelPlacement,
+    }) => {
+      const lane = labelLanes.get(node.id);
+
+      graph.addNode(node.id, {
+        label: node.label,
+        type: node.type,
+        theme_id: node.theme_id,
+        cominRadialLabel: true,
+        cominLabelPlacement,
+        cominLabelLaneIndex: lane?.index ?? 0,
+        cominLabelLaneCount: lane?.count ?? 1,
+        x: cos * radius,
+        y: sin * radius,
+      });
+    },
+  );
 
   data.edges.forEach((edge) => {
     graph.addUndirectedEdgeWithKey(edge.id, edge.source, edge.target, {
