@@ -16,6 +16,7 @@ import {
 } from "../../components/common-icons";
 import {
   useAppearance,
+  useGraphDataset,
   useLayoutState,
   useSelection,
   useSelectionActions,
@@ -23,6 +24,7 @@ import {
   useSigmaGraph,
   useSigmaState,
 } from "../../core/context/dataContexts";
+import { COMIN_UI } from "../../core/comin/uiPreset";
 import { GRAPH_SELECTION_MODES } from "../../core/selection/types";
 import { resetCamera } from "../../core/sigma";
 import NodeProgramBorder from "../../utils/bordered-node-program";
@@ -149,7 +151,15 @@ const sigmaSettings: Partial<Settings> = {
 };
 export const GraphRendering: FC = () => {
   const { backgroundColor, layoutGridColor } = useAppearance();
+  const { nodeData } = useGraphDataset();
   const sigmaGraph = useSigmaGraph();
+
+  const isCominGraph = Object.values(nodeData).some(
+    (data) =>
+      data?.type === "context" ||
+      data?.type === "post" ||
+      data?.type === "source",
+  );
   const { quality } = useLayoutState();
   const { hoveredNode, hoveredEdge, customCursor } = useSigmaState();
   const [isReady, setIsReady] = useState(false);
@@ -164,7 +174,11 @@ export const GraphRendering: FC = () => {
           !isReady && "visually-hidden",
           customCursor ? `cursor-${customCursor}` : (hoveredNode || hoveredEdge) && "cursor-pointer",
         )}
-        style={{ backgroundColor }}
+        style={{
+          backgroundColor: isCominGraph
+            ? COMIN_UI.background
+            : backgroundColor,
+        }}
         graph={sigmaGraph}
         settings={sigmaSettings}
       >
