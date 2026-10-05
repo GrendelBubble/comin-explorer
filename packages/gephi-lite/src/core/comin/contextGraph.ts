@@ -33,11 +33,27 @@ export function cominContextGraphToGraph(data: CominContextGraphResponse): Graph
   graph.setAttribute("title", "Com'In — Contextes");
   graph.setAttribute("description", `Build ${data.build_id}`);
 
-  data.nodes.forEach((node) => {
+  const contexts = [...data.nodes].sort((a, b) =>
+    a.theme_id.localeCompare(b.theme_id, undefined, {
+      numeric: true,
+    }),
+  );
+
+  const contextCount = contexts.length;
+  const radius = Math.max(260, contextCount * 24);
+  const startAngle = -Math.PI / 2;
+  const angleStep =
+    (2 * Math.PI) / Math.max(contextCount, 1);
+
+  contexts.forEach((node, index) => {
+    const angle = startAngle + index * angleStep;
+
     graph.addNode(node.id, {
       label: node.label,
       type: node.type,
       theme_id: node.theme_id,
+      x: Math.cos(angle) * radius,
+      y: Math.sin(angle) * radius,
     });
   });
 
