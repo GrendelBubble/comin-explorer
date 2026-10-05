@@ -142,6 +142,48 @@ export const EventsController: FC = () => {
             (item) => item.type === "post",
           );
 
+          const contextPositions = Object.entries(
+            graphDataset.nodeData,
+          )
+            .filter(
+              ([, data]) => data?.type === "context",
+            )
+            .map(([contextId]) =>
+              sigma
+                .getGraph()
+                .getNodeAttributes(contextId),
+            )
+            .filter(
+              ({ x, y }) =>
+                Number.isFinite(x) &&
+                Number.isFinite(y),
+            );
+
+          const contextsCenter =
+            contextPositions.length > 0
+              ? {
+                  x:
+                    contextPositions.reduce(
+                      (sum, position) =>
+                        sum + position.x,
+                      0,
+                    ) /
+                    contextPositions.length,
+                  y:
+                    contextPositions.reduce(
+                      (sum, position) =>
+                        sum + position.y,
+                      0,
+                    ) /
+                    contextPositions.length,
+                }
+              : { x: 0, y: 0 };
+
+          const outwardAngle = Math.atan2(
+            center.y - contextsCenter.y,
+            center.x - contextsCenter.x,
+          );
+
           posts.forEach((post, index) => {
             if (!graphDataset.fullGraph.hasNode(post.id)) {
               const postsPerRing = 12;
@@ -149,16 +191,36 @@ export const EventsController: FC = () => {
                 Math.floor(index / postsPerRing);
               const indexInRing =
                 index % postsPerRing;
+
               const itemsInRing = Math.min(
                 postsPerRing,
                 posts.length -
                   ringIndex * postsPerRing,
               );
+
+              // Les posts restent toujours dans le
+              // demi-plan extérieur du contexte.
+              const fanSpan =
+                itemsInRing <= 1
+                  ? 0
+                  : Math.min(
+                      Math.PI * 0.78,
+                      Math.max(
+                        Math.PI / 3,
+                        (itemsInRing - 1) * 0.22,
+                      ),
+                    );
+
               const angle =
-                (2 * Math.PI * indexInRing) /
-                Math.max(itemsInRing, 1);
+                itemsInRing <= 1
+                  ? outwardAngle
+                  : outwardAngle -
+                    fanSpan / 2 +
+                    (fanSpan * indexInRing) /
+                      (itemsInRing - 1);
+
               const radius =
-                110 + ringIndex * 90;
+                155 + ringIndex * 100;
 
               createNode(post.id, {
                 ...post,
