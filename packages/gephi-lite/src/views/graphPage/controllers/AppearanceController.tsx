@@ -41,6 +41,30 @@ export const AppearanceController: FC = () => {
         data?.type === "source",
     );
 
+    const expandedContextIds = new Set<string>();
+
+    graph.forEachEdge((_edge, attributes, source, target) => {
+      if (attributes.type !== "supported_by_post") return;
+
+      if (nodeData[source]?.type === "context") {
+        expandedContextIds.add(source);
+      }
+
+      if (nodeData[target]?.type === "context") {
+        expandedContextIds.add(target);
+      }
+    });
+
+    const hasExpandedContexts = expandedContextIds.size > 0;
+
+    const overviewLabelNodes = new Set(
+      graph
+        .nodes()
+        .filter((id) => nodeData[id]?.type === "context")
+        .sort((a, b) => graph.degree(b) - graph.degree(a))
+        .slice(0, 6),
+    );
+
     // what we've got in the state,
     //  or
     //    the node selection,
@@ -92,6 +116,24 @@ export const AppearanceController: FC = () => {
       }
 
       res.rawSize = res.size || DEFAULT_NODE_SIZE;
+
+      if (isCominGraph && !hoveredNode) {
+        const nodeType = nodeData[id]?.type;
+
+        if (nodeType === "post") {
+          res.hideLabel = true;
+        }
+
+        if (nodeType === "context") {
+          if (hasExpandedContexts) {
+            if (!expandedContextIds.has(id)) {
+              res.hideLabel = true;
+            }
+          } else if (!overviewLabelNodes.has(id)) {
+            res.hideLabel = true;
+          }
+        }
+      }
 
       if (hasEmphasizedNodes && !allEmphasizedNodes.has(id)) {
         res.hideLabel = true;
