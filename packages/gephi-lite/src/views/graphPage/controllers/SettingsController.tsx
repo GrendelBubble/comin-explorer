@@ -1,5 +1,5 @@
 import { useSigma } from "@react-sigma/core";
-import { FC, useEffect } from "react";
+import { FC, useEffect, useRef } from "react";
 import { NodeLabelDrawingFunction, drawDiscNodeLabel, drawStraightEdgeLabel } from "sigma/rendering";
 import { DEFAULT_SETTINGS, Settings } from "sigma/settings";
 
@@ -42,17 +42,90 @@ const drawWrappedDiscNodeLabel: NodeLabelDrawingFunction = (
   });
 
   if (line) lines.push(line);
+
+  const lineWidths = lines.map(
+    (wrappedLine) => context.measureText(wrappedLine).width,
+  );
+
   context.restore();
 
-  const lineHeight = settings.labelSize * COMIN_LABEL_LINE_HEIGHT;
-  const offset = ((lines.length - 1) * lineHeight) / 2;
+  const radial =
+    (data as typeof data & { cominRadialLabel?: boolean })
+      .cominRadialLabel === true;
+
+  const lineHeight =
+    settings.labelSize * COMIN_LABEL_LINE_HEIGHT;
+
+  const centeredOffset =
+    ((lines.length - 1) * lineHeight) / 2;
+
+  let placement: "left" | "right" | "top" | "bottom" =
+    "right";
+
+  if (radial) {
+    const dx =
+      data.x - context.canvas.width / 2;
+    const dy =
+      data.y - context.canvas.height / 2;
+
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      placement = dx >= 0 ? "right" : "left";
+    } else {
+      placement = dy >= 0 ? "bottom" : "top";
+    }
+  }
+
+  const discOffset = data.size + 3;
+  const verticalGap = 8;
 
   lines.forEach((wrappedLine, index) => {
+    const width = lineWidths[index];
+
+    let x = data.x;
+    let y =
+      data.y -
+      centeredOffset +
+      index * lineHeight;
+
+    if (placement === "left") {
+      x =
+        data.x -
+        2 * discOffset -
+        width;
+    }
+
+    if (placement === "top") {
+      x =
+        data.x -
+        width / 2 -
+        discOffset;
+
+      y =
+        data.y -
+        data.size -
+        verticalGap -
+        (lines.length - index) * lineHeight;
+    }
+
+    if (placement === "bottom") {
+      x =
+        data.x -
+        width / 2 -
+        discOffset;
+
+      y =
+        data.y +
+        data.size +
+        verticalGap +
+        index * lineHeight;
+    }
+
     drawDiscNodeLabel(
       context,
       {
         ...data,
-        y: data.y - offset + index * lineHeight,
+        x,
+        y,
         label: wrappedLine,
       },
       settings,
@@ -65,11 +138,31 @@ export const SettingsController: FC<{ setIsReady: () => void }> = ({ setIsReady 
   const graphDataset = useGraphDataset();
   const graphAppearance = useAppearance();
   const { theme } = usePreferences();
+  const initialCameraReadyRef = useRef(false);
 
   useEffect(() => {
     sigmaAtom.set(sigma);
-    resetCamera({ forceRefresh: true });
-  }, [sigma]);
+
+    if (initialCameraReadyRef.current) return;
+    if (!Object.keys(graphDataset.nodeData).length) return;
+
+    const isCominGraph = Object.values(
+      graphDataset.nodeData,
+    ).some(
+      (data) =>
+        data?.type === "context" ||
+        data?.type === "context_unit" ||
+        data?.type === "post" ||
+        data?.type === "source",
+    );
+
+    resetCamera({
+      forceRefresh: true,
+      padding: isCominGraph ? 0.16 : 0,
+    });
+
+    initialCameraReadyRef.current = true;
+  }, [graphDataset.nodeData, sigma]);
 
   useEffect(() => {
     const mode = getAppliedTheme(theme);

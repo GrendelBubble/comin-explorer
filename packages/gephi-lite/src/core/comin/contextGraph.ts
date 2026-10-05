@@ -52,6 +52,7 @@ export function cominContextGraphToGraph(data: CominContextGraphResponse): Graph
       label: node.label,
       type: node.type,
       theme_id: node.theme_id,
+      cominRadialLabel: true,
       x: Math.cos(angle) * radius,
       y: Math.sin(angle) * radius,
     });
