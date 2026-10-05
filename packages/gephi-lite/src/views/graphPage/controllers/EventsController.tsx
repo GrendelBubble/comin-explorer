@@ -45,6 +45,66 @@ export const EventsController: FC = () => {
    * Handle interaction events:
    */
   useEffect(() => {
+    const collapseContext = (
+      contextNodeId: string,
+      themeId: string,
+    ) => {
+      const edgePrefix =
+        `supported-by-post:${themeId}--`;
+
+      const edgeIds = graphDataset.fullGraph
+        .edges(contextNodeId)
+        .filter((edgeId) =>
+          edgeId.startsWith(edgePrefix),
+        );
+
+      const postIds = edgeIds.map((edgeId) =>
+        graphDataset.fullGraph.opposite(
+          contextNodeId,
+          edgeId,
+        ),
+      );
+
+      const removablePostIds = postIds.filter(
+        (postId) => {
+          const otherSupportingEdges =
+            graphDataset.fullGraph
+              .edges(postId)
+              .filter(
+                (edgeId) =>
+                  !edgeIds.includes(edgeId) &&
+                  edgeId.startsWith(
+                    "supported-by-post:",
+                  ),
+              );
+
+          return otherSupportingEdges.length === 0;
+        },
+      );
+
+      if (edgeIds.length) {
+        deleteItems("edges", edgeIds);
+      }
+
+      if (removablePostIds.length) {
+        deleteItems("nodes", removablePostIds);
+      }
+
+      expandedThemesRef.current.delete(themeId);
+
+      if (
+        sigma
+          .getGraph()
+          .hasNode(contextNodeId)
+      ) {
+        sigma.getGraph().setNodeAttribute(
+          contextNodeId,
+          "cominExpanded",
+          false,
+        );
+      }
+    };
+
     registerEvents({
       enterEdge({ edge }) {
         if (dragStateRef.current.type !== "idle") return;
@@ -87,42 +147,36 @@ export const EventsController: FC = () => {
 
         const themeId = nodeData.theme_id;
         if (typeof themeId !== "string") return;
-        if (expandedThemesRef.current.has(themeId)) {
-          const edgePrefix = `supported-by-post:${themeId}--`;
-
-          const edgeIds = graphDataset.fullGraph
-            .edges(node)
-            .filter((edgeId) => edgeId.startsWith(edgePrefix));
-
-          const postIds = edgeIds.map((edgeId) =>
-            graphDataset.fullGraph.opposite(node, edgeId),
-          );
-
-          const removablePostIds = postIds.filter((postId) => {
-            const otherSupportingEdges = graphDataset.fullGraph
-              .edges(postId)
-              .filter(
-                (edgeId) =>
-                  !edgeIds.includes(edgeId) &&
-                  edgeId.startsWith("supported-by-post:"),
-              );
-
-            return otherSupportingEdges.length === 0;
-          });
-
-          if (edgeIds.length) deleteItems("edges", edgeIds);
-          if (removablePostIds.length) {
-            deleteItems("nodes", removablePostIds);
-          }
-
-          expandedThemesRef.current.delete(themeId);
-          sigma.getGraph().setNodeAttribute(
-            node,
-            "cominExpanded",
-            false,
-          );
+        if (
+          expandedThemesRef.current.has(themeId)
+        ) {
+          collapseContext(node, themeId);
           return;
         }
+
+        // Un seul contexte peut être développé.
+        // Fermer tout contexte précédemment ouvert
+        // avant d'ouvrir le nouveau.
+        Array.from(
+          expandedThemesRef.current,
+        ).forEach((expandedThemeId) => {
+          const previousContextEntry =
+            Object.entries(
+              graphDataset.nodeData,
+            ).find(
+              ([, data]) =>
+                data?.type === "context" &&
+                data.theme_id ===
+                  expandedThemeId,
+            );
+
+          if (!previousContextEntry) return;
+
+          collapseContext(
+            previousContextEntry[0],
+            expandedThemeId,
+          );
+        });
 
         expandedThemesRef.current.add(themeId);
         sigma.getGraph().setNodeAttribute(
