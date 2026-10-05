@@ -81,7 +81,9 @@ export const SettingsController: FC<{ setIsReady: () => void }> = ({ setIsReady 
     const isCominGraph = Object.values(graphDataset.nodeData).some(
       (data) =>
         data?.type === "context" ||
-        data?.type === "context_unit",
+        data?.type === "context_unit" ||
+        data?.type === "post" ||
+        data?.type === "source",
     );
 
     sigma.setSetting(
@@ -101,9 +103,27 @@ export const SettingsController: FC<{ setIsReady: () => void }> = ({ setIsReady 
     sigma.setSetting("defaultDrawEdgeLabel", getDrawEdgeLabel(graphAppearance, drawStraightEdgeLabel));
 
     const labelThreshold = inputToStateThreshold(graphAppearance.nodesLabelSize.density);
-    const labelDensity = labelThreshold === 0 ? Infinity : DEFAULT_SETTINGS.labelDensity;
-    sigma.setSetting("labelRenderedSizeThreshold", labelThreshold);
-    sigma.setSetting("labelDensity", labelDensity);
+
+    if (isCominGraph) {
+      sigma.setSetting("labelRenderedSizeThreshold", 0);
+      sigma.setSetting("labelDensity", 0.65);
+      sigma.setSetting("labelGridCellSize", 140);
+    } else {
+      const labelDensity =
+        labelThreshold === 0
+          ? Infinity
+          : DEFAULT_SETTINGS.labelDensity;
+
+      sigma.setSetting(
+        "labelRenderedSizeThreshold",
+        labelThreshold,
+      );
+      sigma.setSetting("labelDensity", labelDensity);
+      sigma.setSetting(
+        "labelGridCellSize",
+        DEFAULT_SETTINGS.labelGridCellSize,
+      );
+    }
 
     setIsReady();
   }, [graphAppearance, graphDataset, setIsReady, sigma, theme]);

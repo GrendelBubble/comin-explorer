@@ -16,6 +16,7 @@ import {
   useSelection,
   useSigmaState,
 } from "../../../core/context/dataContexts";
+import { COMIN_UI } from "../../../core/comin/uiPreset";
 import { GephiLiteSigma } from "../../../core/graph/types";
 import { getAppliedTheme } from "../../../core/preferences/utils";
 import { memoizedBrighten, memoizedDarken } from "../../../utils/colors";
@@ -35,7 +36,17 @@ export const AppearanceController: FC = () => {
     const isCominGraph = Object.values(nodeData).some(
       (data) =>
         data?.type === "context" ||
-        data?.type === "context_unit",
+        data?.type === "context_unit" ||
+        data?.type === "post" ||
+        data?.type === "source",
+    );
+
+    const overviewLabelNodes = new Set(
+      graph
+        .nodes()
+        .filter((id) => nodeData[id]?.type === "context")
+        .sort((a, b) => graph.degree(b) - graph.degree(a))
+        .slice(0, 6),
     );
 
     // what we've got in the state,
@@ -71,8 +82,53 @@ export const AppearanceController: FC = () => {
 
     sigma.setSetting("nodeReducer", (id, attr) => {
       const res = structuredClone(attr) as Partial<CustomNodeDisplayData>;
+      const isExpandedContext =
+        nodeData[id]?.type === "context" &&
+        attr.cominExpanded === true;
+      const hasExpandedContexts = graph.someNode(
+        (_node, attributes) =>
+          attributes.cominExpanded === true,
+      );
       res.zIndex = 0;
+
+      if (isCominGraph) {
+        const nodeType = nodeData[id]?.type;
+
+        if (nodeType === "context") {
+          res.color = COMIN_UI.nodes.context.color;
+          res.size = COMIN_UI.nodes.context.size;
+        } else if (nodeType === "post") {
+          res.color = COMIN_UI.nodes.post.color;
+          res.size = COMIN_UI.nodes.post.size;
+        } else if (nodeType === "source") {
+          res.color = COMIN_UI.nodes.source.color;
+          res.size = COMIN_UI.nodes.source.size;
+        }
+      }
+
       res.rawSize = res.size || DEFAULT_NODE_SIZE;
+
+      if (isCominGraph && !hoveredNode) {
+        const nodeType = nodeData[id]?.type;
+
+        if (nodeType === "post") {
+          res.hideLabel = true;
+        }
+
+        if (nodeType === "context") {
+          if (hasExpandedContexts) {
+            if (isExpandedContext) {
+              res.forceLabel = true;
+              res.hideLabel = false;
+              res.zIndex = 2;
+            } else {
+              res.hideLabel = true;
+            }
+          } else if (!overviewLabelNodes.has(id)) {
+            res.hideLabel = true;
+          }
+        }
+      }
 
       if (hasEmphasizedNodes && !allEmphasizedNodes.has(id)) {
         res.hideLabel = true;
@@ -89,10 +145,16 @@ export const AppearanceController: FC = () => {
 
       if (allEmphasizedNodes.has(id)) {
         res.forceLabel = true;
+        res.hideLabel = false;
         res.zIndex = 1;
       }
 
-      if (isCominGraph && hoveredNode && id !== hoveredNode) {
+      if (
+        isCominGraph &&
+        hoveredNode &&
+        id !== hoveredNode &&
+        !isExpandedContext
+      ) {
         res.hideLabel = true;
         res.forceLabel = false;
       }
@@ -109,6 +171,16 @@ export const AppearanceController: FC = () => {
               size: weight,
               type: graph.isDirected(id) ? "arrow" : "line",
             } as Partial<CustomEdgeDisplayData>;
+            if (isCominGraph) {
+              if (attr.type === "related") {
+                res.color = COMIN_UI.edges.related.color;
+                res.size = COMIN_UI.edges.related.size;
+              } else if (attr.type === "supported_by_post") {
+                res.color = COMIN_UI.edges.supportedByPost.color;
+                res.size = COMIN_UI.edges.supportedByPost.size;
+              }
+            }
+
             res.zIndex = res.zIndex || 0;
             res.rawSize = res.size || DEFAULT_EDGE_SIZE;
 
