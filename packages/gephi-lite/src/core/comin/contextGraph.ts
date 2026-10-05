@@ -59,7 +59,7 @@ export function cominContextGraphToGraph(data: CominContextGraphResponse): Graph
     if (Math.abs(cos) >= Math.abs(sin)) {
       cominLabelPlacement = cos >= 0 ? "right" : "left";
     } else {
-      cominLabelPlacement = sin >= 0 ? "bottom" : "top";
+      cominLabelPlacement = sin >= 0 ? "top" : "bottom";
     }
 
     graph.addNode(node.id, {
