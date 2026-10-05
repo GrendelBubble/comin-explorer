@@ -14,7 +14,7 @@ import {
 import { EVENTS, useEventsContext } from "../../../core/context/eventsContext";
 import { GephiLiteSigma } from "../../../core/graph/types";
 import { LayoutMapping } from "../../../core/layouts/types";
-import { fetchCominContextPostsGraph } from "../../../core/comin/api";
+import { fetchCominContextChildrenGraph } from "../../../core/comin/api";
 import { bindUpHandler } from "../../../utils/events";
 
 const DRAG_EVENTS_TOLERANCE = 3;
@@ -49,21 +49,39 @@ export const EventsController: FC = () => {
       contextNodeId: string,
       themeId: string,
     ) => {
-      const edgePrefix =
-        `supported-by-post:${themeId}--`;
+      const incidentEdgeIds =
+        graphDataset.fullGraph.edges(contextNodeId);
 
-      const edgeIds = graphDataset.fullGraph
-        .edges(contextNodeId)
-        .filter((edgeId) =>
-          edgeId.startsWith(edgePrefix),
+      const supportingEdgeIds =
+        incidentEdgeIds.filter(
+          (edgeId) =>
+            graphDataset.edgeData[edgeId]?.type ===
+            "supported_by_post",
         );
 
-      const postIds = edgeIds.map((edgeId) =>
-        graphDataset.fullGraph.opposite(
-          contextNodeId,
-          edgeId,
-        ),
+      const semanticEdgeIds =
+        incidentEdgeIds.filter(
+          (edgeId) =>
+            graphDataset.edgeData[edgeId]?.type ===
+            "has_context_child",
+        );
+
+      const postIds = supportingEdgeIds.map(
+        (edgeId) =>
+          graphDataset.fullGraph.opposite(
+            contextNodeId,
+            edgeId,
+          ),
       );
+
+      const semanticNodeIds =
+        semanticEdgeIds.map(
+          (edgeId) =>
+            graphDataset.fullGraph.opposite(
+              contextNodeId,
+              edgeId,
+            ),
+        );
 
       const removablePostIds = postIds.filter(
         (postId) => {
@@ -72,22 +90,36 @@ export const EventsController: FC = () => {
               .edges(postId)
               .filter(
                 (edgeId) =>
-                  !edgeIds.includes(edgeId) &&
-                  edgeId.startsWith(
-                    "supported-by-post:",
-                  ),
+                  !supportingEdgeIds.includes(
+                    edgeId,
+                  ) &&
+                  graphDataset.edgeData[edgeId]
+                    ?.type ===
+                    "supported_by_post",
               );
 
-          return otherSupportingEdges.length === 0;
+          return (
+            otherSupportingEdges.length === 0
+          );
         },
       );
+
+      const edgeIds = [
+        ...supportingEdgeIds,
+        ...semanticEdgeIds,
+      ];
 
       if (edgeIds.length) {
         deleteItems("edges", edgeIds);
       }
 
-      if (removablePostIds.length) {
-        deleteItems("nodes", removablePostIds);
+      const nodeIds = [
+        ...removablePostIds,
+        ...semanticNodeIds,
+      ];
+
+      if (nodeIds.length) {
+        deleteItems("nodes", nodeIds);
       }
 
       expandedThemesRef.current.delete(themeId);
@@ -187,7 +219,7 @@ export const EventsController: FC = () => {
 
         try {
           const postGraph =
-            await fetchCominContextPostsGraph(themeId);
+            await fetchCominContextChildrenGraph(themeId);
 
           const center =
             sigma.getGraph().getNodeAttributes(node);
@@ -238,7 +270,77 @@ export const EventsController: FC = () => {
             center.x - contextsCenter.x,
           );
 
-          posts.forEach((post, index) => {
+          const semanticChildren = postGraph.nodes
+            .filter(
+              (item) => item.type === "context_semantic",
+            )
+            .sort((a, b) => {
+              const order = {
+                synthese: 0,
+                tensions_limites: 1,
+                questions_ouvertes: 2,
+              } as const;
+
+              return (
+                order[a.semantic_kind] -
+                order[b.semantic_kind]
+              );
+            });
+
+          const semanticRadii = [70, 115, 160];
+
+          semanticChildren.forEach(
+            (semanticChild, index) => {
+              if (
+                !graphDataset.fullGraph.hasNode(
+                  semanticChild.id,
+                )
+              ) {
+                const radius =
+                  semanticRadii[index] ??
+                  70 + index * 45;
+
+                createNode(semanticChild.id, {
+                  ...semanticChild,
+                  x:
+                    center.x +
+                    Math.cos(outwardAngle) *
+                      radius,
+                  y:
+                    center.y +
+                    Math.sin(outwardAngle) *
+                      radius,
+                });
+              }
+
+              const edge = postGraph.edges.find(
+                (candidate) =>
+                  candidate.type ===
+                    "has_context_child" &&
+                  candidate.target ===
+                    semanticChild.id,
+              );
+
+              if (
+                edge &&
+                !graphDataset.fullGraph.hasEdge(
+                  edge.id,
+                )
+              ) {
+                createEdge(
+                  edge.id,
+                  {
+                    type: edge.type,
+                  },
+                  edge.source,
+                  edge.target,
+                  false,
+                );
+              }
+            },
+          );
+
+	  posts.forEach((post, index) => {
             if (!graphDataset.fullGraph.hasNode(post.id)) {
               const postsPerRing = 12;
               const ringIndex =
@@ -274,7 +376,7 @@ export const EventsController: FC = () => {
                       (itemsInRing - 1);
 
               const radius =
-                155 + ringIndex * 100;
+                230 + ringIndex * 100;
 
               createNode(post.id, {
                 ...post,
@@ -289,11 +391,13 @@ export const EventsController: FC = () => {
 
             const edge = postGraph.edges.find(
               (candidate) =>
+                candidate.type === "supported_by_post" &&
                 candidate.target === post.id,
             );
 
             if (
               edge &&
+              edge.type === "supported_by_post" &&
               !graphDataset.fullGraph.hasEdge(edge.id)
             ) {
               createEdge(

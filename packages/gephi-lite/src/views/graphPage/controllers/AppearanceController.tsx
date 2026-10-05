@@ -36,6 +36,7 @@ export const AppearanceController: FC = () => {
     const isCominGraph = Object.values(nodeData).some(
       (data) =>
         data?.type === "context" ||
+        data?.type === "context_semantic" ||
         data?.type === "context_unit" ||
         data?.type === "post" ||
         data?.type === "source",
@@ -371,6 +372,9 @@ export const AppearanceController: FC = () => {
         if (nodeType === "context") {
           res.color = COMIN_UI.nodes.context.color;
           res.size = COMIN_UI.nodes.context.size;
+        } else if (nodeType === "context_semantic") {
+          res.color = COMIN_UI.nodes.contextSemantic.color;
+          res.size = COMIN_UI.nodes.contextSemantic.size;
         } else if (nodeType === "post") {
           res.color = COMIN_UI.nodes.post.color;
           res.size = COMIN_UI.nodes.post.size;
@@ -461,6 +465,9 @@ export const AppearanceController: FC = () => {
               } else if (edgeType === "supported_by_post") {
                 res.color = COMIN_UI.edges.supportedByPost.color;
                 res.size = COMIN_UI.edges.supportedByPost.size;
+              } else if (edgeType === "has_context_child") {
+                res.color = COMIN_UI.edges.hasContextChild.color;
+                res.size = COMIN_UI.edges.hasContextChild.size;
               }
             }
 
