@@ -14,7 +14,7 @@ import {
 import { EVENTS, useEventsContext } from "../../../core/context/eventsContext";
 import { GephiLiteSigma } from "../../../core/graph/types";
 import { LayoutMapping } from "../../../core/layouts/types";
-import { fetchCominContextUnitsGraph } from "../../../core/comin/api";
+import { fetchCominContextPostsGraph } from "../../../core/comin/api";
 import { bindUpHandler } from "../../../utils/events";
 
 const DRAG_EVENTS_TOLERANCE = 3;
@@ -88,26 +88,32 @@ export const EventsController: FC = () => {
         const themeId = nodeData.theme_id;
         if (typeof themeId !== "string") return;
         if (expandedThemesRef.current.has(themeId)) {
-          const unitIds = Object.entries(graphDataset.nodeData)
-            .filter(
-              ([, data]) =>
-                data?.type === "context_unit" &&
-                data?.theme_id === themeId,
-            )
-            .map(([id]) => id);
+          const edgePrefix = `supported-by-post:${themeId}--`;
 
-          const edgeIds = Array.from(
-            new Set(
-              unitIds.flatMap((unitId) =>
-                graphDataset.fullGraph.hasNode(unitId)
-                  ? graphDataset.fullGraph.edges(unitId)
-                  : [],
-              ),
-            ),
+          const edgeIds = graphDataset.fullGraph
+            .edges(node)
+            .filter((edgeId) => edgeId.startsWith(edgePrefix));
+
+          const postIds = edgeIds.map((edgeId) =>
+            graphDataset.fullGraph.opposite(node, edgeId),
           );
 
+          const removablePostIds = postIds.filter((postId) => {
+            const otherSupportingEdges = graphDataset.fullGraph
+              .edges(postId)
+              .filter(
+                (edgeId) =>
+                  !edgeIds.includes(edgeId) &&
+                  edgeId.startsWith("supported-by-post:"),
+              );
+
+            return otherSupportingEdges.length === 0;
+          });
+
           if (edgeIds.length) deleteItems("edges", edgeIds);
-          if (unitIds.length) deleteItems("nodes", unitIds);
+          if (removablePostIds.length) {
+            deleteItems("nodes", removablePostIds);
+          }
 
           expandedThemesRef.current.delete(themeId);
           return;
@@ -116,41 +122,63 @@ export const EventsController: FC = () => {
         expandedThemesRef.current.add(themeId);
 
         try {
-          const unitGraph = await fetchCominContextUnitsGraph(themeId);
-          const center = sigma.getGraph().getNodeAttributes(node);
+          const postGraph =
+            await fetchCominContextPostsGraph(themeId);
 
-          const units = unitGraph.nodes.filter(
-            (item) => item.type === "context_unit",
+          const center =
+            sigma.getGraph().getNodeAttributes(node);
+
+          const posts = postGraph.nodes.filter(
+            (item) => item.type === "post",
           );
 
-          units.forEach((unit, index) => {
-            if (graphDataset.fullGraph.hasNode(unit.id)) return;
+          posts.forEach((post, index) => {
+            if (!graphDataset.fullGraph.hasNode(post.id)) {
+              const postsPerRing = 12;
+              const ringIndex =
+                Math.floor(index / postsPerRing);
+              const indexInRing =
+                index % postsPerRing;
+              const itemsInRing = Math.min(
+                postsPerRing,
+                posts.length -
+                  ringIndex * postsPerRing,
+              );
+              const angle =
+                (2 * Math.PI * indexInRing) /
+                Math.max(itemsInRing, 1);
+              const radius =
+                110 + ringIndex * 90;
 
-            const unitsPerRing = 12;
-            const ringIndex = Math.floor(index / unitsPerRing);
-            const indexInRing = index % unitsPerRing;
-            const itemsInRing = Math.min(
-              unitsPerRing,
-              units.length - ringIndex * unitsPerRing,
+              createNode(post.id, {
+                ...post,
+                x:
+                  center.x +
+                  Math.cos(angle) * radius,
+                y:
+                  center.y +
+                  Math.sin(angle) * radius,
+              });
+            }
+
+            const edge = postGraph.edges.find(
+              (candidate) =>
+                candidate.target === post.id,
             );
-            const angle =
-              (2 * Math.PI * indexInRing) / Math.max(itemsInRing, 1);
-            const radius = 80 + ringIndex * 70;
 
-            createNode(unit.id, {
-              ...unit,
-              x: center.x + Math.cos(angle) * radius,
-              y: center.y + Math.sin(angle) * radius,
-            });
-
-            const edge = unitGraph.edges.find(
-              (candidate) => candidate.target === unit.id,
-            );
-
-            if (edge && !graphDataset.fullGraph.hasEdge(edge.id)) {
+            if (
+              edge &&
+              !graphDataset.fullGraph.hasEdge(edge.id)
+            ) {
               createEdge(
                 edge.id,
-                { type: edge.type },
+                {
+                  type: edge.type,
+                  supporting_contribution_ids:
+                    edge.supporting_contribution_ids,
+                  supporting_contribution_count:
+                    edge.supporting_contribution_count,
+                },
                 edge.source,
                 edge.target,
                 false,
