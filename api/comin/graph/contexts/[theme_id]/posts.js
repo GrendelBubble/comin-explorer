@@ -30,7 +30,7 @@ module.exports = async function handler(request, response) {
   }
 
   const backendUrl =
-    `${baseUrl}/graph/contexts/${encodeURIComponent(themeId)}/units`;
+    `${baseUrl}/graph/contexts/${encodeURIComponent(themeId)}/posts`;
 
   try {
     const upstream = await fetch(backendUrl, {
