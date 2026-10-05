@@ -15,6 +15,33 @@ const COMIN_LABEL_LINE_HEIGHT = 1.2;
 const COMIN_LABEL_MIN_VERTICAL_SPACING = 58;
 const COMIN_INITIAL_CAMERA_RATIO = 1.3;
 
+type CominRenderedLabelBox = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
+
+let cominRenderedLabelBoxes: CominRenderedLabelBox[] = [];
+
+const resetCominRenderedLabelBoxes = () => {
+  cominRenderedLabelBoxes = [];
+};
+
+const cominLabelBoxesOverlap = (
+  a: CominRenderedLabelBox,
+  b: CominRenderedLabelBox,
+) => {
+  const margin = 6;
+
+  return !(
+    a.right + margin < b.left ||
+    a.left > b.right + margin ||
+    a.bottom + margin < b.top ||
+    a.top > b.bottom + margin
+  );
+};
+
 const drawWrappedDiscNodeLabel: NodeLabelDrawingFunction = (
   context,
   data,
@@ -128,66 +155,120 @@ const drawWrappedDiscNodeLabel: NodeLabelDrawingFunction = (
   const discOffset = data.size + 3;
   const verticalGap = 8;
 
-  lines.forEach((wrappedLine, index) => {
-    const width = lineWidths[index];
+  const linePositions = lines.map(
+    (wrappedLine, index) => {
+      const width = lineWidths[index];
 
-    let x = data.x;
+      let x = data.x;
 
-    const labelCenterY =
-      placement === "left" ||
-      placement === "right"
-        ? lateralLabelCenterY
-        : data.y;
+      const labelCenterY =
+        placement === "left" ||
+        placement === "right"
+          ? lateralLabelCenterY
+          : data.y;
 
-    let y =
-      labelCenterY -
-      centeredOffset +
-      index * lineHeight;
-
-    if (placement === "left") {
-      x =
-        data.x -
-        2 * discOffset -
-        width;
-    }
-
-    if (placement === "top") {
-      x =
-        data.x -
-        width / 2 -
-        discOffset;
-
-      y =
-        data.y -
-        data.size -
-        verticalGap -
-        (lines.length - index) * lineHeight;
-    }
-
-    if (placement === "bottom") {
-      x =
-        data.x -
-        width / 2 -
-        discOffset;
-
-      y =
-        data.y +
-        data.size +
-        verticalGap +
+      let y =
+        labelCenterY -
+        centeredOffset +
         index * lineHeight;
-    }
 
-    drawDiscNodeLabel(
-      context,
-      {
-        ...data,
+      if (placement === "left") {
+        x =
+          data.x -
+          2 * discOffset -
+          width;
+      }
+
+      if (placement === "top") {
+        x =
+          data.x -
+          width / 2 -
+          discOffset;
+
+        y =
+          data.y -
+          data.size -
+          verticalGap -
+          (lines.length - index) *
+            lineHeight;
+      }
+
+      if (placement === "bottom") {
+        x =
+          data.x -
+          width / 2 -
+          discOffset;
+
+        y =
+          data.y +
+          data.size +
+          verticalGap +
+          index * lineHeight;
+      }
+
+      // drawDiscNodeLabel ajoute lui-même discOffset
+      // horizontalement. On calcule donc ici le rectangle
+      // effectivement occupé par le texte.
+      const actualLeft = x + discOffset;
+
+      return {
+        wrappedLine,
+        width,
         x,
         y,
-        label: wrappedLine,
-      },
-      settings,
+        actualLeft,
+      };
+    },
+  );
+
+  const labelBox: CominRenderedLabelBox = {
+    left: Math.min(
+      ...linePositions.map(
+        ({ actualLeft }) => actualLeft,
+      ),
+    ),
+    right: Math.max(
+      ...linePositions.map(
+        ({ actualLeft, width }) =>
+          actualLeft + width,
+      ),
+    ),
+    top: Math.min(
+      ...linePositions.map(
+        ({ y }) => y - settings.labelSize,
+      ),
+    ),
+    bottom: Math.max(
+      ...linePositions.map(
+        ({ y }) =>
+          y + settings.labelSize * 0.35,
+      ),
+    ),
+  };
+
+  const collides =
+    cominRenderedLabelBoxes.some((box) =>
+      cominLabelBoxesOverlap(labelBox, box),
     );
-  });
+
+  if (collides) return;
+
+  cominRenderedLabelBoxes.push(labelBox);
+
+  linePositions.forEach(
+    ({ wrappedLine, x, y }) => {
+      drawDiscNodeLabel(
+        context,
+        {
+          ...data,
+          x,
+          y,
+          label: wrappedLine,
+        },
+        settings,
+      );
+    },
+  );
 };
 
 export const SettingsController: FC<{ setIsReady: () => void }> = ({ setIsReady }) => {
@@ -196,6 +277,20 @@ export const SettingsController: FC<{ setIsReady: () => void }> = ({ setIsReady 
   const graphAppearance = useAppearance();
   const { theme } = usePreferences();
   const initialCameraReadyRef = useRef(false);
+
+  useEffect(() => {
+    sigma.on(
+      "beforeRender",
+      resetCominRenderedLabelBoxes,
+    );
+
+    return () => {
+      sigma.off(
+        "beforeRender",
+        resetCominRenderedLabelBoxes,
+      );
+    };
+  }, [sigma]);
 
   useEffect(() => {
     const camera = sigma.getCamera();
