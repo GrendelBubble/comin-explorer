@@ -12,7 +12,6 @@ import { inputToStateThreshold } from "../../../utils/labels";
 
 const COMIN_LABEL_MAX_WIDTH = 280;
 const COMIN_LABEL_LINE_HEIGHT = 1.2;
-const COMIN_LABEL_MIN_VERTICAL_SPACING = 58;
 const COMIN_INITIAL_CAMERA_RATIO = 1.3;
 
 type CominRenderedLabelBox = {
@@ -104,54 +103,6 @@ const drawWrappedDiscNodeLabel: NodeLabelDrawingFunction = (
       ? cominData.cominLabelPlacement || "right"
       : "right";
 
-  const laneIndex =
-    cominData.cominLabelLaneIndex ?? 0;
-
-  const laneCount =
-    cominData.cominLabelLaneCount ?? 1;
-
-  const laneMinSinGap =
-    cominData.cominLabelLaneMinSinGap ?? 1;
-
-  let lateralLabelCenterY = data.y;
-
-  if (
-    radial &&
-    (placement === "left" ||
-      placement === "right") &&
-    laneCount > 1
-  ) {
-    const centerX = context.canvas.width / 2;
-    const centerY = context.canvas.height / 2;
-
-    const screenRadius = Math.hypot(
-      data.x - centerX,
-      data.y - centerY,
-    );
-
-    const naturalMinGap =
-      screenRadius * laneMinSinGap;
-
-    // Tant que le cercle est assez grand, les titres restent
-    // naturellement attachés à leur nœud.
-    //
-    // Dès que le zoom comprime les distances sous le seuil,
-    // on impose des positions fixes séparées de 58 px.
-    if (
-      naturalMinGap <
-      COMIN_LABEL_MIN_VERTICAL_SPACING
-    ) {
-      const rank =
-        laneIndex -
-        (laneCount - 1) / 2;
-
-      lateralLabelCenterY =
-        centerY +
-        rank *
-          COMIN_LABEL_MIN_VERTICAL_SPACING;
-    }
-  }
-
   const discOffset = data.size + 3;
   const verticalGap = 8;
 
@@ -161,14 +112,8 @@ const drawWrappedDiscNodeLabel: NodeLabelDrawingFunction = (
 
       let x = data.x;
 
-      const labelCenterY =
-        placement === "left" ||
-        placement === "right"
-          ? lateralLabelCenterY
-          : data.y;
-
       let y =
-        labelCenterY -
+        data.y -
         centeredOffset +
         index * lineHeight;
 
