@@ -73,7 +73,32 @@ export const AppearanceController: FC = () => {
     const hasEmphasizedEdges = !!allEmphasizedEdges.size;
 
     sigma.setSetting("nodeReducer", (id, attr) => {
-      const res = structuredClone(attr) as Partial<CustomNodeDisplayData>;
+      const res = structuredClone(attr) as Partial<CustomNodeDisplayData> & {
+        cominRadialLabel?: boolean;
+        cominLabelPlacement?:
+          | "left"
+          | "right"
+          | "top"
+          | "bottom";
+      };
+
+      const cominNodeData = nodeData[id] as
+        | {
+            cominRadialLabel?: boolean;
+            cominLabelPlacement?:
+              | "left"
+              | "right"
+              | "top"
+              | "bottom";
+          }
+        | undefined;
+
+      res.cominRadialLabel =
+        cominNodeData?.cominRadialLabel === true;
+
+      res.cominLabelPlacement =
+        cominNodeData?.cominLabelPlacement;
+
       const isExpandedContext =
         nodeData[id]?.type === "context" &&
         attr.cominExpanded === true;
