@@ -116,10 +116,20 @@ export const EventsController: FC = () => {
           }
 
           expandedThemesRef.current.delete(themeId);
+          sigma.getGraph().setNodeAttribute(
+            node,
+            "cominExpanded",
+            false,
+          );
           return;
         }
 
         expandedThemesRef.current.add(themeId);
+        sigma.getGraph().setNodeAttribute(
+          node,
+          "cominExpanded",
+          true,
+        );
 
         try {
           const postGraph =
@@ -187,6 +197,11 @@ export const EventsController: FC = () => {
           });
         } catch (error) {
           expandedThemesRef.current.delete(themeId);
+          sigma.getGraph().setNodeAttribute(
+            node,
+            "cominExpanded",
+            false,
+          );
           throw error;
         }
       },

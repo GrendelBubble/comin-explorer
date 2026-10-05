@@ -41,24 +41,6 @@ export const AppearanceController: FC = () => {
         data?.type === "source",
     );
 
-    const getExpandedContextIds = () => {
-      const ids = new Set<string>();
-
-      graph.forEachEdge((_edge, attributes, source, target) => {
-        if (attributes.type !== "supported_by_post") return;
-
-        if (nodeData[source]?.type === "context") {
-          ids.add(source);
-        }
-
-        if (nodeData[target]?.type === "context") {
-          ids.add(target);
-        }
-      });
-
-      return ids;
-    };
-
     const overviewLabelNodes = new Set(
       graph
         .nodes()
@@ -100,8 +82,13 @@ export const AppearanceController: FC = () => {
 
     sigma.setSetting("nodeReducer", (id, attr) => {
       const res = structuredClone(attr) as Partial<CustomNodeDisplayData>;
-      const expandedContextIds = getExpandedContextIds();
-      const hasExpandedContexts = expandedContextIds.size > 0;
+      const isExpandedContext =
+        nodeData[id]?.type === "context" &&
+        attr.cominExpanded === true;
+      const hasExpandedContexts = graph.someNode(
+        (_node, attributes) =>
+          attributes.cominExpanded === true,
+      );
       res.zIndex = 0;
 
       if (isCominGraph) {
@@ -130,7 +117,7 @@ export const AppearanceController: FC = () => {
 
         if (nodeType === "context") {
           if (hasExpandedContexts) {
-            if (expandedContextIds.has(id)) {
+            if (isExpandedContext) {
               res.forceLabel = true;
               res.hideLabel = false;
               res.zIndex = 2;
@@ -161,7 +148,12 @@ export const AppearanceController: FC = () => {
         res.zIndex = 1;
       }
 
-      if (isCominGraph && hoveredNode && id !== hoveredNode) {
+      if (
+        isCominGraph &&
+        hoveredNode &&
+        id !== hoveredNode &&
+        !isExpandedContext
+      ) {
         res.hideLabel = true;
         res.forceLabel = false;
       }
