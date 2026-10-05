@@ -34,6 +34,7 @@ export interface CominContextChildPostNode {
   label: string;
   composition_method: string;
   has_note: true;
+  url: string;
   supporting_contribution_ids: string[];
   supporting_contribution_count: number;
 }

@@ -157,6 +157,21 @@ export const EventsController: FC = () => {
       async clickNode({ node, event }) {
         if (dragEventsCountRef.current >= DRAG_EVENTS_TOLERANCE) return;
 
+        const nodeData = graphDataset.nodeData[node];
+
+        if (
+          nodeData?.type === "post" &&
+          typeof nodeData.url === "string" &&
+          nodeData.url
+        ) {
+          window.open(
+            nodeData.url,
+            "_blank",
+            "noopener,noreferrer",
+          );
+          return;
+        }
+
         if (event.original.ctrlKey) {
           toggle({
             type: "nodes",
@@ -174,7 +189,6 @@ export const EventsController: FC = () => {
 
         if (event.original.ctrlKey) return;
 
-        const nodeData = graphDataset.nodeData[node];
         if (nodeData?.type !== "context") return;
 
         const themeId = nodeData.theme_id;
