@@ -14,7 +14,7 @@ import {
 import { EVENTS, useEventsContext } from "../../../core/context/eventsContext";
 import { GephiLiteSigma } from "../../../core/graph/types";
 import { LayoutMapping } from "../../../core/layouts/types";
-import { fetchCominContextPostsGraph } from "../../../core/comin/api";
+import { fetchCominContextChildrenGraph } from "../../../core/comin/api";
 import { bindUpHandler } from "../../../utils/events";
 
 const DRAG_EVENTS_TOLERANCE = 3;
@@ -45,6 +45,98 @@ export const EventsController: FC = () => {
    * Handle interaction events:
    */
   useEffect(() => {
+    const collapseContext = (
+      contextNodeId: string,
+      themeId: string,
+    ) => {
+      const incidentEdgeIds =
+        graphDataset.fullGraph.edges(contextNodeId);
+
+      const supportingEdgeIds =
+        incidentEdgeIds.filter(
+          (edgeId) =>
+            graphDataset.edgeData[edgeId]?.type ===
+            "supported_by_post",
+        );
+
+      const semanticEdgeIds =
+        incidentEdgeIds.filter(
+          (edgeId) =>
+            graphDataset.edgeData[edgeId]?.type ===
+            "has_context_child",
+        );
+
+      const postIds = supportingEdgeIds.map(
+        (edgeId) =>
+          graphDataset.fullGraph.opposite(
+            contextNodeId,
+            edgeId,
+          ),
+      );
+
+      const semanticNodeIds =
+        semanticEdgeIds.map(
+          (edgeId) =>
+            graphDataset.fullGraph.opposite(
+              contextNodeId,
+              edgeId,
+            ),
+        );
+
+      const removablePostIds = postIds.filter(
+        (postId) => {
+          const otherSupportingEdges =
+            graphDataset.fullGraph
+              .edges(postId)
+              .filter(
+                (edgeId) =>
+                  !supportingEdgeIds.includes(
+                    edgeId,
+                  ) &&
+                  graphDataset.edgeData[edgeId]
+                    ?.type ===
+                    "supported_by_post",
+              );
+
+          return (
+            otherSupportingEdges.length === 0
+          );
+        },
+      );
+
+      const edgeIds = [
+        ...supportingEdgeIds,
+        ...semanticEdgeIds,
+      ];
+
+      if (edgeIds.length) {
+        deleteItems("edges", edgeIds);
+      }
+
+      const nodeIds = [
+        ...removablePostIds,
+        ...semanticNodeIds,
+      ];
+
+      if (nodeIds.length) {
+        deleteItems("nodes", nodeIds);
+      }
+
+      expandedThemesRef.current.delete(themeId);
+
+      if (
+        sigma
+          .getGraph()
+          .hasNode(contextNodeId)
+      ) {
+        sigma.getGraph().setNodeAttribute(
+          contextNodeId,
+          "cominExpanded",
+          false,
+        );
+      }
+    };
+
     registerEvents({
       enterEdge({ edge }) {
         if (dragStateRef.current.type !== "idle") return;
@@ -65,6 +157,21 @@ export const EventsController: FC = () => {
       async clickNode({ node, event }) {
         if (dragEventsCountRef.current >= DRAG_EVENTS_TOLERANCE) return;
 
+        const nodeData = graphDataset.nodeData[node];
+
+        if (
+          nodeData?.type === "post" &&
+          typeof nodeData.url === "string" &&
+          nodeData.url
+        ) {
+          window.open(
+            nodeData.url,
+            "_blank",
+            "noopener,noreferrer",
+          );
+          return;
+        }
+
         if (event.original.ctrlKey) {
           toggle({
             type: "nodes",
@@ -82,47 +189,40 @@ export const EventsController: FC = () => {
 
         if (event.original.ctrlKey) return;
 
-        const nodeData = graphDataset.nodeData[node];
         if (nodeData?.type !== "context") return;
 
         const themeId = nodeData.theme_id;
         if (typeof themeId !== "string") return;
-        if (expandedThemesRef.current.has(themeId)) {
-          const edgePrefix = `supported-by-post:${themeId}--`;
-
-          const edgeIds = graphDataset.fullGraph
-            .edges(node)
-            .filter((edgeId) => edgeId.startsWith(edgePrefix));
-
-          const postIds = edgeIds.map((edgeId) =>
-            graphDataset.fullGraph.opposite(node, edgeId),
-          );
-
-          const removablePostIds = postIds.filter((postId) => {
-            const otherSupportingEdges = graphDataset.fullGraph
-              .edges(postId)
-              .filter(
-                (edgeId) =>
-                  !edgeIds.includes(edgeId) &&
-                  edgeId.startsWith("supported-by-post:"),
-              );
-
-            return otherSupportingEdges.length === 0;
-          });
-
-          if (edgeIds.length) deleteItems("edges", edgeIds);
-          if (removablePostIds.length) {
-            deleteItems("nodes", removablePostIds);
-          }
-
-          expandedThemesRef.current.delete(themeId);
-          sigma.getGraph().setNodeAttribute(
-            node,
-            "cominExpanded",
-            false,
-          );
+        if (
+          expandedThemesRef.current.has(themeId)
+        ) {
+          collapseContext(node, themeId);
           return;
         }
+
+        // Un seul contexte peut être développé.
+        // Fermer tout contexte précédemment ouvert
+        // avant d'ouvrir le nouveau.
+        Array.from(
+          expandedThemesRef.current,
+        ).forEach((expandedThemeId) => {
+          const previousContextEntry =
+            Object.entries(
+              graphDataset.nodeData,
+            ).find(
+              ([, data]) =>
+                data?.type === "context" &&
+                data.theme_id ===
+                  expandedThemeId,
+            );
+
+          if (!previousContextEntry) return;
+
+          collapseContext(
+            previousContextEntry[0],
+            expandedThemeId,
+          );
+        });
 
         expandedThemesRef.current.add(themeId);
         sigma.getGraph().setNodeAttribute(
@@ -133,7 +233,7 @@ export const EventsController: FC = () => {
 
         try {
           const postGraph =
-            await fetchCominContextPostsGraph(themeId);
+            await fetchCominContextChildrenGraph(themeId);
 
           const center =
             sigma.getGraph().getNodeAttributes(node);
@@ -142,23 +242,155 @@ export const EventsController: FC = () => {
             (item) => item.type === "post",
           );
 
-          posts.forEach((post, index) => {
+          const contextPositions = Object.entries(
+            graphDataset.nodeData,
+          )
+            .filter(
+              ([, data]) => data?.type === "context",
+            )
+            .map(([contextId]) =>
+              sigma
+                .getGraph()
+                .getNodeAttributes(contextId),
+            )
+            .filter(
+              ({ x, y }) =>
+                Number.isFinite(x) &&
+                Number.isFinite(y),
+            );
+
+          const contextsCenter =
+            contextPositions.length > 0
+              ? {
+                  x:
+                    contextPositions.reduce(
+                      (sum, position) =>
+                        sum + position.x,
+                      0,
+                    ) /
+                    contextPositions.length,
+                  y:
+                    contextPositions.reduce(
+                      (sum, position) =>
+                        sum + position.y,
+                      0,
+                    ) /
+                    contextPositions.length,
+                }
+              : { x: 0, y: 0 };
+
+          const outwardAngle = Math.atan2(
+            center.y - contextsCenter.y,
+            center.x - contextsCenter.x,
+          );
+
+          const semanticChildren = postGraph.nodes
+            .filter(
+              (item) => item.type === "context_semantic",
+            )
+            .sort((a, b) => {
+              const order = {
+                synthese: 0,
+                tensions_limites: 1,
+                questions_ouvertes: 2,
+              } as const;
+
+              return (
+                order[a.semantic_kind] -
+                order[b.semantic_kind]
+              );
+            });
+
+          const semanticRadii = [70, 115, 160];
+
+          semanticChildren.forEach(
+            (semanticChild, index) => {
+              if (
+                !graphDataset.fullGraph.hasNode(
+                  semanticChild.id,
+                )
+              ) {
+                const radius =
+                  semanticRadii[index] ??
+                  70 + index * 45;
+
+                createNode(semanticChild.id, {
+                  ...semanticChild,
+                  x:
+                    center.x +
+                    Math.cos(outwardAngle) *
+                      radius,
+                  y:
+                    center.y +
+                    Math.sin(outwardAngle) *
+                      radius,
+                });
+              }
+
+              const edge = postGraph.edges.find(
+                (candidate) =>
+                  candidate.type ===
+                    "has_context_child" &&
+                  candidate.target ===
+                    semanticChild.id,
+              );
+
+              if (
+                edge &&
+                !graphDataset.fullGraph.hasEdge(
+                  edge.id,
+                )
+              ) {
+                createEdge(
+                  edge.id,
+                  {
+                    type: edge.type,
+                  },
+                  edge.source,
+                  edge.target,
+                  false,
+                );
+              }
+            },
+          );
+
+	  posts.forEach((post, index) => {
             if (!graphDataset.fullGraph.hasNode(post.id)) {
               const postsPerRing = 12;
               const ringIndex =
                 Math.floor(index / postsPerRing);
               const indexInRing =
                 index % postsPerRing;
+
               const itemsInRing = Math.min(
                 postsPerRing,
                 posts.length -
                   ringIndex * postsPerRing,
               );
+
+              // Les posts restent toujours dans le
+              // demi-plan extérieur du contexte.
+              const fanSpan =
+                itemsInRing <= 1
+                  ? 0
+                  : Math.min(
+                      Math.PI * 0.78,
+                      Math.max(
+                        Math.PI / 3,
+                        (itemsInRing - 1) * 0.22,
+                      ),
+                    );
+
               const angle =
-                (2 * Math.PI * indexInRing) /
-                Math.max(itemsInRing, 1);
+                itemsInRing <= 1
+                  ? outwardAngle
+                  : outwardAngle -
+                    fanSpan / 2 +
+                    (fanSpan * indexInRing) /
+                      (itemsInRing - 1);
+
               const radius =
-                110 + ringIndex * 90;
+                230 + ringIndex * 100;
 
               createNode(post.id, {
                 ...post,
@@ -173,11 +405,13 @@ export const EventsController: FC = () => {
 
             const edge = postGraph.edges.find(
               (candidate) =>
+                candidate.type === "supported_by_post" &&
                 candidate.target === post.id,
             );
 
             if (
               edge &&
+              edge.type === "supported_by_post" &&
               !graphDataset.fullGraph.hasEdge(edge.id)
             ) {
               createEdge(

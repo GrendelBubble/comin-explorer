@@ -118,9 +118,11 @@ export const sigmaStateAtom = atom<SigmaState>(getEmptySigmaState());
 export const resetCamera = ({
   source = "dataset",
   forceRefresh,
+  padding = 0,
 }: {
   forceRefresh?: boolean;
   source?: "sigma" | "dataset";
+  padding?: number;
 } = {}) => {
   const sigma = sigmaAtom.get();
   const sigmaGraph = sigmaGraphAtom.get();
@@ -149,7 +151,11 @@ export const resetCamera = ({
     // This bit of code prevents zooming fully on the graph, when there are only 1, 2 or 3 nodes:
     const extentX = maxX - minX;
     const extentY = maxY - minY;
-    const marginFactor = Math.max(3 - nodes.length, 0);
+    const automaticMarginFactor = Math.max(3 - nodes.length, 0);
+    const marginFactor = Math.max(
+      automaticMarginFactor,
+      padding,
+    );
 
     const bbox = {
       x: [minX - marginFactor * extentX, maxX + marginFactor * extentX] as Extent,

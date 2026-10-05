@@ -6,6 +6,10 @@ export const COMIN_UI = {
       color: "#294C60",
       size: 18,
     },
+    contextSemantic: {
+      color: "#8A7A68",
+      size: 9,
+    },
     post: {
       color: "#C96F4A",
       size: 10,
@@ -22,12 +26,16 @@ export const COMIN_UI = {
 
   edges: {
     related: {
-      color: "#C8CDD0",
-      size: 0.7,
+      color: "#BFC4C7",
+      size: 2,
     },
     supportedByPost: {
-      color: "#B8A99C",
-      size: 1.2,
+      color: "#A99080",
+      size: 2,
+    },
+    hasContextChild: {
+      color: "#9A9185",
+      size: 2,
     },
   },
 } as const;

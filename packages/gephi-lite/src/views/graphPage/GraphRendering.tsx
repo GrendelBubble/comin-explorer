@@ -180,7 +180,10 @@ export const GraphRendering: FC = () => {
             : backgroundColor,
         }}
         graph={sigmaGraph}
-        settings={sigmaSettings}
+        settings={{
+          ...sigmaSettings,
+          minEdgeThickness: 0.3,
+        }}
       >
         <EventsController />
         <AppearanceController />
