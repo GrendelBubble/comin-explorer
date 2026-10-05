@@ -9,6 +9,10 @@
     {
       "source": "/comin-api/graph/contexts/:theme_id/units",
       "destination": "/api/comin/graph/contexts/:theme_id/units"
+    },
+    {
+      "source": "/comin-api/graph/contexts/:theme_id/posts",
+      "destination": "/api/comin/graph/contexts/:theme_id/posts"
     }
   ]
 }
