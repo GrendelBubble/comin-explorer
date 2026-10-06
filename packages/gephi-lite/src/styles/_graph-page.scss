@@ -122,3 +122,50 @@ ul.attributes-list {
     left: 0;
   }
 }
+
+.comin-markdown {
+  table {
+    width: 100%;
+    margin: 1.5rem 0;
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 1px solid #d7d0c5;
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 0.95rem;
+  }
+
+  th,
+  td {
+    padding: 0.75rem 1rem;
+    vertical-align: top;
+    text-align: left;
+    border-right: 1px solid #e2ddd5;
+    border-bottom: 1px solid #e2ddd5;
+  }
+
+  th {
+    background: #eee9e1;
+    color: #294c60;
+    font-weight: 700;
+  }
+
+  tbody tr:nth-child(even) td {
+    background: #faf8f4;
+  }
+
+  tbody td:first-child {
+    font-weight: 650;
+    color: #3f3a35;
+    white-space: nowrap;
+  }
+
+  tr:last-child td {
+    border-bottom: 0;
+  }
+
+  th:last-child,
+  td:last-child {
+    border-right: 0;
+  }
+}
