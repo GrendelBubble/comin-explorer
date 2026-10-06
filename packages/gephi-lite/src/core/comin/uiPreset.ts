@@ -12,6 +12,7 @@ export const COMIN_UI = {
     },
     post: {
       color: "#C96F4A",
+      borderColor: "#294C60",
       size: 10,
     },
     source: {

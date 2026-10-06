@@ -402,6 +402,11 @@ export const AppearanceController: FC = () => {
               ? postTypeColor
               : COMIN_UI.nodes.post.color;
 
+          // Les couleurs métier sont volontairement claires :
+          // le contour sombre assure leur lisibilité sur le fond.
+          res.borderColor =
+            COMIN_UI.nodes.post.borderColor;
+          res.type = "bordered";
           res.size = COMIN_UI.nodes.post.size;
         } else if (nodeType === "source") {
           res.color = COMIN_UI.nodes.source.color;
@@ -440,7 +445,18 @@ export const AppearanceController: FC = () => {
         }
       }
 
-      if (hasEmphasizedNodes && !allEmphasizedNodes.has(id)) {
+      const isExpandedContextChild =
+        hasExpandedContexts &&
+        (
+          nodeData[id]?.type === "post" ||
+          nodeData[id]?.type === "context_semantic"
+        );
+
+      if (
+        hasEmphasizedNodes &&
+        !allEmphasizedNodes.has(id) &&
+        !isExpandedContextChild
+      ) {
         res.hideLabel = true;
         res.borderColor = res.color;
         res.color =
