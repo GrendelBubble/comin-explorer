@@ -1,5 +1,6 @@
 import { FC, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import {
   CominPostNoteResponse,
@@ -139,6 +140,7 @@ export const PostNoteReader: FC<PostNoteReaderProps> = ({
         {note && (
           <div className="mt-4">
             <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
               components={{
                 a: ({ children, ...props }) => (
                   <a
