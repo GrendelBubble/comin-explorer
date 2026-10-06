@@ -24,6 +24,7 @@ import {
   useSigmaGraph,
   useSigmaState,
 } from "../../core/context/dataContexts";
+import { CominContextSemanticNode } from "../../core/comin/contextChildrenGraph";
 import { COMIN_UI } from "../../core/comin/uiPreset";
 import { GRAPH_SELECTION_MODES } from "../../core/selection/types";
 import { resetCamera } from "../../core/sigma";
@@ -33,6 +34,7 @@ import { EventsController } from "./controllers/EventsController";
 import { GridController } from "./controllers/GridController";
 import { SelectionController } from "./controllers/SelectionController";
 import { SettingsController } from "./controllers/SettingsController";
+import { ContextSemanticReader } from "./ContextSemanticReader";
 
 function useFullScreen(): { toggle: () => void; isFullScreen: boolean } {
   const [isFullScreen, setFullScreen] = useState<boolean>(false);
@@ -150,6 +152,8 @@ const sigmaSettings: Partial<Settings> = {
   allowInvalidContainer: true,
 };
 export const GraphRendering: FC = () => {
+  const [contextSemanticItem, setContextSemanticItem] =
+    useState<CominContextSemanticNode | null>(null);
   const { backgroundColor, layoutGridColor } = useAppearance();
   const { nodeData } = useGraphDataset();
   const sigmaGraph = useSigmaGraph();
@@ -185,7 +189,9 @@ export const GraphRendering: FC = () => {
           minEdgeThickness: 0.3,
         }}
       >
-        <EventsController />
+        <EventsController
+          onOpenContextSemantic={setContextSemanticItem}
+        />
         <AppearanceController />
         <SettingsController setIsReady={setReady} />
         <div className="sigma-layers">
@@ -201,6 +207,10 @@ export const GraphRendering: FC = () => {
         <InteractionsController />
         <GraphCaptionLayer />
       </SigmaContainer>
+      <ContextSemanticReader
+        item={contextSemanticItem}
+        onClose={() => setContextSemanticItem(null)}
+      />
     </>
   );
 };

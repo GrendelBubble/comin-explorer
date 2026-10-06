@@ -15,11 +15,20 @@ import { EVENTS, useEventsContext } from "../../../core/context/eventsContext";
 import { GephiLiteSigma } from "../../../core/graph/types";
 import { LayoutMapping } from "../../../core/layouts/types";
 import { fetchCominContextChildrenGraph } from "../../../core/comin/api";
+import { CominContextSemanticNode } from "../../../core/comin/contextChildrenGraph";
 import { bindUpHandler } from "../../../utils/events";
 
 const DRAG_EVENTS_TOLERANCE = 3;
 
-export const EventsController: FC = () => {
+interface EventsControllerProps {
+  onOpenContextSemantic: (
+    item: CominContextSemanticNode,
+  ) => void;
+}
+
+export const EventsController: FC<EventsControllerProps> = ({
+  onOpenContextSemantic,
+}) => {
   const sigma: GephiLiteSigma = useSigma();
   const registerEvents = useRegisterEvents();
   const { emitter: globalEmitter } = useEventsContext();
@@ -158,6 +167,13 @@ export const EventsController: FC = () => {
         if (dragEventsCountRef.current >= DRAG_EVENTS_TOLERANCE) return;
 
         const nodeData = graphDataset.nodeData[node];
+
+        if (nodeData?.type === "context_semantic") {
+          onOpenContextSemantic(
+            nodeData as unknown as CominContextSemanticNode,
+          );
+          return;
+        }
 
         if (
           nodeData?.type === "post" &&
@@ -550,6 +566,7 @@ export const EventsController: FC = () => {
     toggle,
     setNodePositions,
     globalEmitter,
+    onOpenContextSemantic,
   ]);
 
   // DOM events not handled by sigma:
