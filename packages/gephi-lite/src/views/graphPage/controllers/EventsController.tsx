@@ -240,8 +240,6 @@ export const EventsController: FC<EventsControllerProps> = ({
     ) => {
       const graph = sigma.getGraph();
 
-      if (!graph.hasNode(postNodeId)) return;
-
       let sourceGraph =
         postSourcesCacheRef.current.get(postId);
 
