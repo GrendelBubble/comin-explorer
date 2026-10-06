@@ -637,6 +637,8 @@ export const EventsController: FC<EventsControllerProps> = ({
           typeof nodeData.post_id === "number" &&
           !event.original.ctrlKey
         ) {
+          const postId = nodeData.post_id;
+
           if (postClickTimerRef.current) {
             clearTimeout(
               postClickTimerRef.current,
@@ -649,7 +651,7 @@ export const EventsController: FC<EventsControllerProps> = ({
 
               void togglePostSources(
                 node,
-                nodeData.post_id,
+                postId,
               );
             }, 260);
 
