@@ -418,8 +418,14 @@ export const AppearanceController: FC = () => {
           res.color = COMIN_UI.nodes.source.color;
           res.size = COMIN_UI.nodes.source.size;
         } else if (nodeType === "container") {
-          res.color = COMIN_UI.nodes.structuralSource.color;
-          res.size = COMIN_UI.nodes.structuralSource.size;
+          res.color =
+            COMIN_UI.nodes.structuralSource.color;
+          res.borderColor =
+            COMIN_UI.nodes.structuralSource.borderColor;
+          res.borderSize = 1.5;
+          res.type = "diamond";
+          res.size =
+            COMIN_UI.nodes.structuralSource.size;
         }
       }
 

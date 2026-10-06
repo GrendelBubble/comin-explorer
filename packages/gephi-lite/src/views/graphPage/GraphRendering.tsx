@@ -32,6 +32,7 @@ import { COMIN_UI } from "../../core/comin/uiPreset";
 import { GRAPH_SELECTION_MODES } from "../../core/selection/types";
 import { resetCamera } from "../../core/sigma";
 import NodeProgramBorder from "../../utils/bordered-node-program";
+import NodeProgramDiamond from "../../utils/diamond-node-program";
 import { AppearanceController } from "./controllers/AppearanceController";
 import { EventsController } from "./controllers/EventsController";
 import { GridController } from "./controllers/GridController";
@@ -155,6 +156,7 @@ const sigmaSettings: Partial<Settings> = {
   nodeProgramClasses: {
     image: NodeImageProgram,
     bordered: NodeProgramBorder,
+    diamond: NodeProgramDiamond,
   },
   allowInvalidContainer: true,
 };

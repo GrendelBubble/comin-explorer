@@ -632,32 +632,6 @@ export const EventsController: FC<EventsControllerProps> = ({
           return;
         }
 
-        if (
-          nodeData?.type === "post" &&
-          typeof nodeData.post_id === "number" &&
-          !event.original.ctrlKey
-        ) {
-          const postId = nodeData.post_id;
-
-          if (postClickTimerRef.current) {
-            clearTimeout(
-              postClickTimerRef.current,
-            );
-          }
-
-          postClickTimerRef.current =
-            setTimeout(() => {
-              postClickTimerRef.current = null;
-
-              void togglePostSources(
-                node,
-                postId,
-              );
-            }, 260);
-
-          return;
-        }
-
         if (event.original.ctrlKey) {
           toggle({
             type: "nodes",
@@ -920,6 +894,100 @@ export const EventsController: FC<EventsControllerProps> = ({
               );
             }
           });
+
+          // Chaque post affiche immédiatement sa racine
+          // documentaire éventuelle. Le container reste
+          // replié jusqu'au clic utilisateur.
+          await Promise.all(
+            posts.map(async (post) => {
+              try {
+                let sourceGraph =
+                  postSourcesCacheRef.current.get(
+                    post.post_id,
+                  );
+
+                if (!sourceGraph) {
+                  sourceGraph =
+                    await fetchCominPostSourcesGraph(
+                      post.post_id,
+                    );
+
+                  postSourcesCacheRef.current.set(
+                    post.post_id,
+                    sourceGraph,
+                  );
+                }
+
+                const rootEdge =
+                  sourceGraph.edges.find(
+                    (edge) =>
+                      edge.type === "has_source",
+                  );
+
+                if (!rootEdge) return;
+
+                const root =
+                  sourceGraph.nodes.find(
+                    (item) =>
+                      item.id === rootEdge.target,
+                  );
+
+                if (!root) return;
+
+                const graph = sigma.getGraph();
+
+                if (!graph.hasNode(post.id)) return;
+
+                const postPosition =
+                  graph.getNodeAttributes(post.id);
+
+                const angle = Math.atan2(
+                  postPosition.y - center.y,
+                  postPosition.x - center.x,
+                );
+
+                const rootDistance = 38;
+
+                if (!graph.hasNode(root.id)) {
+                  createNode(root.id, {
+                    ...root,
+                    cominPostId: post.post_id,
+                    x:
+                      postPosition.x +
+                      Math.cos(angle) *
+                        rootDistance,
+                    y:
+                      postPosition.y +
+                      Math.sin(angle) *
+                        rootDistance,
+                  });
+                }
+
+                if (!graph.hasEdge(rootEdge.id)) {
+                  createEdge(
+                    rootEdge.id,
+                    {
+                      type: rootEdge.type,
+                      relation_type:
+                        rootEdge.relation_type,
+                      source_path:
+                        rootEdge.source_path,
+                    },
+                    post.id,
+                    root.id,
+                    false,
+                  );
+                }
+
+                expandedPostsRef.current.add(
+                  post.post_id,
+                );
+              } catch {
+                // Un post sans racine exploitable reste
+                // simplement affiché seul.
+              }
+            }),
+          );
         } catch (error) {
           expandedThemesRef.current.delete(themeId);
           sigma.getGraph().setNodeAttribute(
