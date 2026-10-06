@@ -450,16 +450,18 @@ export const AppearanceController: FC = () => {
         }
       }
 
+      const isCominPost =
+        isCominGraph &&
+        nodeData[id]?.type === "post";
+
       const isExpandedContextChild =
         contextIsExpanded &&
-        (
-          nodeData[id]?.type === "post" ||
-          nodeData[id]?.type === "context_semantic"
-        );
+        nodeData[id]?.type === "context_semantic";
 
       if (
         hasEmphasizedNodes &&
         !allEmphasizedNodes.has(id) &&
+        !isCominPost &&
         !isExpandedContextChild
       ) {
         res.hideLabel = true;
