@@ -733,6 +733,10 @@ export const EventsController: FC<EventsControllerProps> = ({
             }
           });
 
+          onOpenPostNote(
+            nodeData as unknown as CominContextChildPostNode,
+          );
+
           return;
         }
 
@@ -1023,27 +1027,6 @@ export const EventsController: FC<EventsControllerProps> = ({
           select({ type: "edges", items: new Set([edge]), replace: true });
         }
       },
-      async doubleClickNode({ node, event }) {
-        event.preventSigmaDefault();
-
-        const nodeData =
-          graphDataset.nodeData[node];
-
-        if (
-          nodeData?.type === "post" &&
-          typeof nodeData.post_id === "number"
-        ) {
-          await expandPostSources(
-            node,
-            nodeData.post_id,
-          );
-
-          onOpenPostNote(
-            nodeData as unknown as CominContextChildPostNode,
-          );
-        }
-      },
-
       doubleClick(event: MouseCoords) {
         event.preventSigmaDefault();
       },
