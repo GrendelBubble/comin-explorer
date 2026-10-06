@@ -31,6 +31,24 @@ export const ContextSemanticReader: FC<
 
   if (item === null) return null;
 
+  const rawUnits: unknown = item.units;
+  let units: CominContextSemanticNode["units"] = [];
+
+  if (Array.isArray(rawUnits)) {
+    units = rawUnits as CominContextSemanticNode["units"];
+  } else if (typeof rawUnits === "string") {
+    try {
+      const parsed = JSON.parse(rawUnits);
+
+      if (Array.isArray(parsed)) {
+        units =
+          parsed as CominContextSemanticNode["units"];
+      }
+    } catch {
+      units = [];
+    }
+  }
+
   return (
     <div
       role="dialog"
@@ -84,7 +102,7 @@ export const ContextSemanticReader: FC<
         <h1>{item.label}</h1>
 
         <div className="d-flex flex-column gl-gap-4 mt-4">
-          {item.units.map((unit) => (
+          {units.map((unit) => (
             <p key={unit.unit_id} className="m-0">
               {unit.text}
             </p>
