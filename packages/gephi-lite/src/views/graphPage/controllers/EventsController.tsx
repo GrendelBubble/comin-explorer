@@ -33,9 +33,13 @@ const DRAG_EVENTS_TOLERANCE = 3;
 // Les sources restent accolées au post.
 // Elles prolongent localement l'axe contexte -> post.
 const POST_SOURCE_DISTANCE = 10;
-const SOURCE_CHILD_DISTANCE = 14;
-const SOURCE_CHILD_RING_GAP = 10;
-const SOURCE_LOCAL_FAN_MAX = Math.PI / 6;
+
+// Un container ouvert déploie ses enfants dans une petite grille,
+// pas dans un nouvel éventail radial.
+const CONTAINER_CHILD_COLUMNS = 6;
+const CONTAINER_CHILD_FORWARD_DISTANCE = 24;
+const CONTAINER_CHILD_ROW_GAP = 18;
+const CONTAINER_CHILD_LATERAL_GAP = 18;
 
 interface EventsControllerProps {
   onOpenContextSemantic: (
@@ -167,7 +171,8 @@ export const EventsController: FC<EventsControllerProps> = ({
       if (!children.length) return;
 
       const graph = sigma.getGraph();
-      const parent = graph.getNodeAttributes(parentNodeId);
+      const parent =
+        graph.getNodeAttributes(parentNodeId);
 
       const postEntry = Object.entries(
         graphDataset.nodeData,
@@ -182,52 +187,63 @@ export const EventsController: FC<EventsControllerProps> = ({
           ? graph.getNodeAttributes(postEntry[0])
           : { x: parent.x - 1, y: parent.y };
 
+      // Axe post -> container : direction vers l'extérieur.
       const direction = Math.atan2(
         parent.y - postPosition.y,
         parent.x - postPosition.x,
       );
 
-      const perRing = 8;
+      const forwardX = Math.cos(direction);
+      const forwardY = Math.sin(direction);
+
+      // Axe perpendiculaire pour constituer les rangées.
+      const lateralX = -forwardY;
+      const lateralY = forwardX;
 
       children.forEach((child, index) => {
-        const ring = Math.floor(index / perRing);
-        const indexInRing = index % perRing;
-
-        const countInRing = Math.min(
-          perRing,
-          children.length - ring * perRing,
+        const row = Math.floor(
+          index / CONTAINER_CHILD_COLUMNS,
         );
 
-        const span =
-          countInRing <= 1
-            ? 0
-            : Math.min(
-                SOURCE_LOCAL_FAN_MAX,
-                (countInRing - 1) * 0.16,
-              );
+        const column =
+          index % CONTAINER_CHILD_COLUMNS;
 
-        const angle =
-          countInRing <= 1
-            ? direction
-            : direction -
-              span / 2 +
-              (span * indexInRing) /
-                (countInRing - 1);
+        const rowStart =
+          row * CONTAINER_CHILD_COLUMNS;
 
-        const radius =
-          SOURCE_CHILD_DISTANCE +
-          ring * SOURCE_CHILD_RING_GAP;
+        const countInRow = Math.min(
+          CONTAINER_CHILD_COLUMNS,
+          children.length - rowStart,
+        );
 
-        if (!graphDataset.fullGraph.hasNode(child.id)) {
+        // Centrer chaque rangée autour de l'axe du container.
+        const centeredColumn =
+          column - (countInRow - 1) / 2;
+
+        const forwardDistance =
+          CONTAINER_CHILD_FORWARD_DISTANCE +
+          row * CONTAINER_CHILD_ROW_GAP;
+
+        const lateralDistance =
+          centeredColumn *
+          CONTAINER_CHILD_LATERAL_GAP;
+
+        if (
+          !graphDataset.fullGraph.hasNode(
+            child.id,
+          )
+        ) {
           createNode(child.id, {
             ...child,
             cominPostId: postId,
             x:
               parent.x +
-              Math.cos(angle) * radius,
+              forwardX * forwardDistance +
+              lateralX * lateralDistance,
             y:
               parent.y +
-              Math.sin(angle) * radius,
+              forwardY * forwardDistance +
+              lateralY * lateralDistance,
           });
         }
       });
@@ -409,6 +425,7 @@ export const EventsController: FC<EventsControllerProps> = ({
       containerNodeId: string,
       postId: number,
     ) => {
+      // Clic sur le container déjà ouvert : on le referme.
       if (
         expandedContainersRef.current.has(
           containerNodeId,
@@ -417,6 +434,25 @@ export const EventsController: FC<EventsControllerProps> = ({
         collapseSourceChildren(containerNodeId);
         return;
       }
+
+      // Un seul container développé à la fois.
+      // Fermer tous les autres avant d'ouvrir celui-ci.
+      Array.from(
+        expandedContainersRef.current,
+      ).forEach((expandedContainerId) => {
+        if (
+          expandedContainerId ===
+          containerNodeId
+        ) {
+          return;
+        }
+
+        collapseSourceChildren(
+          expandedContainerId,
+        );
+      });
+
+      expandedContainersRef.current.clear();
 
       let sourceGraph =
         postSourcesCacheRef.current.get(postId);
