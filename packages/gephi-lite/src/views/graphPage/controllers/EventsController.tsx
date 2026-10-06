@@ -37,7 +37,6 @@ const POST_SOURCE_DISTANCE = 34;
 const SOURCE_CHILD_DISTANCE = 46;
 const SOURCE_CHILD_RING_GAP = 32;
 const SOURCE_LOCAL_FAN_MAX = Math.PI / 3;
-const POST_SINGLE_CLICK_DELAY_MS = 220;
 
 interface EventsControllerProps {
   onOpenContextSemantic: (
@@ -77,9 +76,6 @@ export const EventsController: FC<EventsControllerProps> = ({
   const postSourcesCacheRef = useRef(
     new Map<number, CominPostSourcesGraphResponse>(),
   );
-  const postClickTimerRef = useRef<
-    ReturnType<typeof setTimeout> | null
-  >(null);
 
   /**
    * Handle interaction events:
@@ -402,65 +398,6 @@ export const EventsController: FC<EventsControllerProps> = ({
       );
     };
 
-    const showPostSources = async (
-      postNodeId: string,
-      postId: number,
-    ) => {
-      // Un seul micro-arbre de sources visible à la fois.
-      Array.from(
-        expandedPostsRef.current,
-      ).forEach((expandedPostId) => {
-        if (expandedPostId === postId) return;
-
-        const expandedPostEntry =
-          Object.entries(
-            graphDataset.nodeData,
-          ).find(
-            ([, data]) =>
-              data?.type === "post" &&
-              data.post_id === expandedPostId,
-          );
-
-        if (expandedPostEntry) {
-          collapsePostSources(
-            expandedPostEntry[0],
-            expandedPostId,
-          );
-        } else {
-          expandedPostsRef.current.delete(
-            expandedPostId,
-          );
-        }
-      });
-
-      // Même si les données sont déjà en cache,
-      // reconstruire les nœuds/arêtes à chaque réouverture.
-      await expandPostSources(
-        postNodeId,
-        postId,
-      );
-    };
-
-    const togglePostSources = async (
-      postNodeId: string,
-      postId: number,
-    ) => {
-      if (
-        expandedPostsRef.current.has(postId)
-      ) {
-        collapsePostSources(
-          postNodeId,
-          postId,
-        );
-        return;
-      }
-
-      await showPostSources(
-        postNodeId,
-        postId,
-      );
-    };
-
     const toggleContainer = async (
       containerNodeId: string,
       postId: number,
@@ -719,31 +656,6 @@ export const EventsController: FC<EventsControllerProps> = ({
 
         if (event.original.ctrlKey) return;
 
-        if (
-          nodeData?.type === "post" &&
-          typeof nodeData.post_id === "number"
-        ) {
-          const postId = nodeData.post_id;
-
-          if (postClickTimerRef.current) {
-            clearTimeout(
-              postClickTimerRef.current,
-            );
-          }
-
-          postClickTimerRef.current =
-            setTimeout(() => {
-              postClickTimerRef.current = null;
-
-              void togglePostSources(
-                node,
-                postId,
-              );
-            }, POST_SINGLE_CLICK_DELAY_MS);
-
-          return;
-        }
-
         if (nodeData?.type !== "context") return;
 
         const themeId = nodeData.theme_id;
@@ -991,9 +903,23 @@ export const EventsController: FC<EventsControllerProps> = ({
           });
 
           /*
-           * Les sources ne sont plus ouvertes automatiquement avec
-           * tous les posts : cela évite la vue en "hérisson".
+           * Chaque post affiche sa ou ses racines documentaires.
+           * expandPostSources réutilise le cache mais recrée les
+           * nœuds/arêtes après une fermeture/réouverture du contexte.
+           * Leur placement reste local, court et décalé de +/-45°.
            */
+          await Promise.all(
+            posts.map(async (post) => {
+              try {
+                await expandPostSources(
+                  post.id,
+                  post.post_id,
+                );
+              } catch {
+                // Un post sans source exploitable reste affiché seul.
+              }
+            }),
+          );
         } catch (error) {
           expandedThemesRef.current.delete(themeId);
           sigma.getGraph().setNodeAttribute(
@@ -1020,13 +946,6 @@ export const EventsController: FC<EventsControllerProps> = ({
       async doubleClickNode({ node, event }) {
         event.preventSigmaDefault();
 
-        if (postClickTimerRef.current) {
-          clearTimeout(
-            postClickTimerRef.current,
-          );
-          postClickTimerRef.current = null;
-        }
-
         const nodeData =
           graphDataset.nodeData[node];
 
@@ -1034,7 +953,7 @@ export const EventsController: FC<EventsControllerProps> = ({
           nodeData?.type === "post" &&
           typeof nodeData.post_id === "number"
         ) {
-          await showPostSources(
+          await expandPostSources(
             node,
             nodeData.post_id,
           );
@@ -1124,13 +1043,6 @@ export const EventsController: FC<EventsControllerProps> = ({
 
     const unbind = bindUpHandler(upHandler);
     return () => {
-      if (postClickTimerRef.current) {
-        clearTimeout(
-          postClickTimerRef.current,
-        );
-        postClickTimerRef.current = null;
-      }
-
       unbind();
     };
   }, [
