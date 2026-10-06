@@ -94,3 +94,31 @@ ul.attributes-list {
     margin-bottom: 1rem;
   }
 }
+
+.comin-search-toggle {
+  position: absolute;
+  top: 1rem;
+  left: 0;
+  z-index: 145;
+  width: 2rem;
+  height: 3rem;
+  border: 1px solid var(--gl-container-border-color);
+  border-left: 0;
+  border-radius: 0 0.5rem 0.5rem 0;
+  background: var(--gl-container-highest-bg);
+  color: var(--gl-body-color);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: left 0.3s ease;
+}
+
+#graph-page.comin-search-open .comin-search-toggle {
+  left: $gl-sys-size-container-large;
+}
+
+@include media-breakpoint-down(sm) {
+  #graph-page.comin-search-open .comin-search-toggle {
+    left: 0;
+  }
+}

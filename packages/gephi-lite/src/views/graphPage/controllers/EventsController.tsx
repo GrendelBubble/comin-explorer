@@ -300,6 +300,11 @@ export const EventsController: FC<EventsControllerProps> = ({
             center.x - contextsCenter.x,
           );
 
+          // Les nœuds sémantiques se développent vers
+          // le centre du cercle des contextes, tandis
+          // que les posts restent à l'extérieur.
+          const inwardAngle = outwardAngle + Math.PI;
+
           const semanticChildren = postGraph.nodes
             .filter(
               (item) => item.type === "context_semantic",
@@ -334,11 +339,11 @@ export const EventsController: FC<EventsControllerProps> = ({
                   ...semanticChild,
                   x:
                     center.x +
-                    Math.cos(outwardAngle) *
+                    Math.cos(inwardAngle) *
                       radius,
                   y:
                     center.y +
-                    Math.sin(outwardAngle) *
+                    Math.sin(inwardAngle) *
                       radius,
                 });
               }

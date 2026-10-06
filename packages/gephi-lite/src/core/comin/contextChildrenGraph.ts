@@ -31,6 +31,7 @@ export interface CominContextChildPostNode {
   type: "post";
   post_id: number;
   post_type: string;
+  post_type_color: string | null;
   label: string;
   composition_method: string;
   has_note: true;

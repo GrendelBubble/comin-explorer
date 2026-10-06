@@ -19,7 +19,11 @@ import {
 import { COMIN_UI } from "../../../core/comin/uiPreset";
 import { GephiLiteSigma } from "../../../core/graph/types";
 import { getAppliedTheme } from "../../../core/preferences/utils";
-import { memoizedBrighten, memoizedDarken } from "../../../utils/colors";
+import {
+  isValidColor,
+  memoizedBrighten,
+  memoizedDarken,
+} from "../../../utils/colors";
 
 export const AppearanceController: FC = () => {
   const sigma: GephiLiteSigma = useSigma();
@@ -315,6 +319,11 @@ export const AppearanceController: FC = () => {
       return acceptedIds;
     };
 
+    const hasExpandedContexts = graph.someNode(
+      (_node, attributes) =>
+        attributes.cominExpanded === true,
+    );
+
     sigma.setSetting("nodeReducer", (id, attr) => {
       const res = structuredClone(attr) as Partial<CustomNodeDisplayData> & {
         cominRadialLabel?: boolean;
@@ -360,23 +369,39 @@ export const AppearanceController: FC = () => {
       const isExpandedContext =
         nodeData[id]?.type === "context" &&
         attr.cominExpanded === true;
-      const hasExpandedContexts = graph.someNode(
-        (_node, attributes) =>
-          attributes.cominExpanded === true,
-      );
       res.zIndex = 0;
 
       if (isCominGraph) {
         const nodeType = nodeData[id]?.type;
 
         if (nodeType === "context") {
-          res.color = COMIN_UI.nodes.context.color;
+          res.color =
+            hasExpandedContexts && !isExpandedContext
+              ? memoizedBrighten(
+                  COMIN_UI.nodes.context.color,
+                )
+              : COMIN_UI.nodes.context.color;
           res.size = COMIN_UI.nodes.context.size;
+
+          if (
+            hasExpandedContexts &&
+            !isExpandedContext
+          ) {
+            res.zIndex = -1;
+          }
         } else if (nodeType === "context_semantic") {
           res.color = COMIN_UI.nodes.contextSemantic.color;
           res.size = COMIN_UI.nodes.contextSemantic.size;
         } else if (nodeType === "post") {
-          res.color = COMIN_UI.nodes.post.color;
+          const postTypeColor =
+            nodeData[id]?.post_type_color;
+
+          res.color =
+            typeof postTypeColor === "string" &&
+            isValidColor(postTypeColor)
+              ? postTypeColor
+              : COMIN_UI.nodes.post.color;
+
           res.size = COMIN_UI.nodes.post.size;
         } else if (nodeType === "source") {
           res.color = COMIN_UI.nodes.source.color;
@@ -460,7 +485,27 @@ export const AppearanceController: FC = () => {
               const edgeType = edgeData[id]?.type;
 
               if (edgeType === "related") {
-                res.color = COMIN_UI.edges.related.color;
+                const source = graph.source(id);
+                const target = graph.target(id);
+
+                const touchesExpandedContext =
+                  graph.getNodeAttribute(
+                    source,
+                    "cominExpanded",
+                  ) === true ||
+                  graph.getNodeAttribute(
+                    target,
+                    "cominExpanded",
+                  ) === true;
+
+                res.color =
+                  hasExpandedContexts &&
+                  !touchesExpandedContext
+                    ? memoizedBrighten(
+                        COMIN_UI.edges.related.color,
+                      )
+                    : COMIN_UI.edges.related.color;
+
                 res.size = COMIN_UI.edges.related.size;
               } else if (edgeType === "supported_by_post") {
                 res.color = COMIN_UI.edges.supportedByPost.color;
