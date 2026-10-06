@@ -506,6 +506,19 @@ export const AppearanceController: FC = () => {
         res.forceLabel = false;
       }
 
+      // Sources et containers utilisent le cartouche HTML.
+      // Aucun titre Sigma ne doit traverser la grille.
+      if (
+        isCominGraph &&
+        (
+          nodeData[id]?.type === "source" ||
+          nodeData[id]?.type === "container"
+        )
+      ) {
+        res.hideLabel = true;
+        res.forceLabel = false;
+      }
+
       return res;
     });
     sigma.setSetting(

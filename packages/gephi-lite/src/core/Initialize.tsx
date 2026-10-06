@@ -9,7 +9,7 @@ import { extractFilename } from "../utils/url";
 import { appearanceActions } from "./appearance";
 import { fetchCominContextGraph } from "./comin/api";
 import { useBroadcast } from "./broadcast/useBroadcast";
-import { useFileActions, useGraphDataset, useGraphDatasetActions } from "./context/dataContexts";
+import { useFileActions, useGraphDatasetActions } from "./context/dataContexts";
 import { graphDatasetAtom } from "./graph";
 import { initializeGraphDataset } from "./graph/utils";
 import { inferAppearanceState } from "./appearance/utils";
@@ -32,7 +32,6 @@ export const Initialize: FC<PropsWithChildren<unknown>> = ({ children }) => {
   const { notify } = useNotifications();
   const { openModal } = useModal();
   const { open } = useFileActions();
-  const { metadata } = useGraphDataset();
   const { resetGraph } = useGraphDatasetActions();
   const [broadcastID, setBroadcastID] = useState<string | null>(null);
   useBroadcast(broadcastID);
@@ -188,8 +187,8 @@ export const Initialize: FC<PropsWithChildren<unknown>> = ({ children }) => {
    * Update document title:
    */
   useEffect(() => {
-    document.title = metadata.title ? `Gephi Lite - ${metadata.title}` : "Gephi Lite";
-  }, [metadata.title]);
+    document.title = "Com'In Explorer";
+  }, []);
 
   return (
     <I18n>

@@ -1,4 +1,4 @@
-import { SigmaContainer } from "@react-sigma/core";
+import { SigmaContainer, useSigma } from "@react-sigma/core";
 import { createNodeImageProgram } from "@sigma/node-image";
 import cx from "classnames";
 import { FC, useCallback, useEffect, useState } from "react";
@@ -137,6 +137,196 @@ const GraphCaptionLayer: FC = () => {
   );
 };
 
+const CominSourceHoverLabel: FC = () => {
+  const sigma = useSigma();
+  const { nodeData, edgeData } = useGraphDataset();
+  const { hoveredNode } = useSigmaState();
+
+  const [position, setPosition] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
+
+  const updatePosition = useCallback(() => {
+    if (!hoveredNode) {
+      setPosition(null);
+      return;
+    }
+
+    const nodeType =
+      nodeData[hoveredNode]?.type;
+
+    if (
+      nodeType !== "source" &&
+      nodeType !== "container"
+    ) {
+      setPosition(null);
+      return;
+    }
+
+    const graph = sigma.getGraph();
+
+    if (!graph.hasNode(hoveredNode)) {
+      setPosition(null);
+      return;
+    }
+
+    let containerId: string | null = null;
+
+    if (nodeType === "container") {
+      containerId = hoveredNode;
+    } else {
+      const parentEdge = graph
+        .edges(hoveredNode)
+        .find(
+          (edgeId) =>
+            edgeData[edgeId]?.type ===
+              "contains_source" &&
+            graph.target(edgeId) ===
+              hoveredNode,
+        );
+
+      if (parentEdge) {
+        containerId =
+          graph.source(parentEdge);
+      }
+    }
+
+    let points: Array<{
+      x: number;
+      y: number;
+    }> = [];
+
+    if (
+      containerId &&
+      graph.hasNode(containerId)
+    ) {
+      const childIds = graph
+        .edges(containerId)
+        .filter(
+          (edgeId) =>
+            edgeData[edgeId]?.type ===
+              "contains_source" &&
+            graph.source(edgeId) ===
+              containerId,
+        )
+        .map((edgeId) =>
+          graph.target(edgeId),
+        )
+        .filter((childId) =>
+          graph.hasNode(childId),
+        );
+
+      points = childIds.map((childId) => {
+        const attributes =
+          graph.getNodeAttributes(childId);
+
+        return sigma.graphToViewport({
+          x: attributes.x,
+          y: attributes.y,
+        });
+      });
+    }
+
+    if (!points.length) {
+      const attributes =
+        graph.getNodeAttributes(hoveredNode);
+
+      points = [
+        sigma.graphToViewport({
+          x: attributes.x,
+          y: attributes.y,
+        }),
+      ];
+    }
+
+    const minX = Math.min(
+      ...points.map(({ x }) => x),
+    );
+
+    const maxX = Math.max(
+      ...points.map(({ x }) => x),
+    );
+
+    const minY = Math.min(
+      ...points.map(({ y }) => y),
+    );
+
+    setPosition({
+      left: (minX + maxX) / 2,
+      top: minY,
+    });
+  }, [
+    edgeData,
+    hoveredNode,
+    nodeData,
+    sigma,
+  ]);
+
+  useEffect(() => {
+    updatePosition();
+
+    const camera = sigma.getCamera();
+
+    camera.on("updated", updatePosition);
+
+    return () => {
+      camera.off(
+        "updated",
+        updatePosition,
+      );
+    };
+  }, [sigma, updatePosition]);
+
+  if (!hoveredNode || !position) {
+    return null;
+  }
+
+  const nodeType =
+    nodeData[hoveredNode]?.type;
+
+  if (
+    nodeType !== "source" &&
+    nodeType !== "container"
+  ) {
+    return null;
+  }
+
+  const rawLabel =
+    nodeData[hoveredNode]?.label;
+
+  const label =
+    typeof rawLabel === "string"
+      ? rawLabel.trim()
+      : "";
+
+  if (!label) return null;
+
+  return (
+    <div
+      className="position-absolute"
+      style={{
+        left: position.left,
+        top: position.top,
+        transform:
+          "translate(-50%, calc(-100% - 10px))",
+        maxWidth: 420,
+        padding: "6px 10px",
+        backgroundColor: COMIN_UI.background,
+        border: "1px solid #B0A79A",
+        borderRadius: 6,
+        fontSize: 14,
+        lineHeight: 1.25,
+        textAlign: "center",
+        pointerEvents: "none",
+        zIndex: 20,
+      }}
+    >
+      {label}
+    </div>
+  );
+};
+
 const NodeImageProgram = createNodeImageProgram({
   size: {
     mode: "max",
@@ -213,6 +403,7 @@ export const GraphRendering: FC = () => {
         />
         <AppearanceController />
         <SettingsController setIsReady={setReady} />
+        <CominSourceHoverLabel />
         <div className="sigma-layers">
           {quality.enabled && quality.showGrid && quality.metric?.deltaMax && (
             <GridController

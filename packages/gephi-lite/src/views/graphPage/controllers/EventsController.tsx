@@ -699,6 +699,43 @@ export const EventsController: FC<EventsControllerProps> = ({
 
         if (event.original.ctrlKey) return;
 
+        if (
+          nodeData?.type === "post" &&
+          typeof nodeData.post_id === "number"
+        ) {
+          const clickedPostId = nodeData.post_id;
+
+          Array.from(
+            expandedContainersRef.current,
+          ).forEach((containerId) => {
+            const containerPostId = Number(
+              (
+                graphDataset.nodeData[
+                  containerId
+                ] as
+                  | {
+                      cominPostId?: number;
+                    }
+                  | undefined
+              )?.cominPostId,
+            );
+
+            if (
+              containerPostId !== clickedPostId
+            ) {
+              collapseSourceChildren(
+                containerId,
+              );
+
+              expandedContainersRef.current.delete(
+                containerId,
+              );
+            }
+          });
+
+          return;
+        }
+
         if (nodeData?.type !== "context") return;
 
         const themeId = nodeData.theme_id;
