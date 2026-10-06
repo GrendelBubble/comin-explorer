@@ -30,13 +30,12 @@ import { bindUpHandler } from "../../../utils/events";
 
 const DRAG_EVENTS_TOLERANCE = 3;
 
-// Les sources forment un micro-arbre local autour du post.
-// Elles ne prolongent jamais l'axe radial contexte -> post.
-const POST_SOURCE_BRANCH_OFFSET = Math.PI / 4;
-const POST_SOURCE_DISTANCE = 34;
-const SOURCE_CHILD_DISTANCE = 46;
-const SOURCE_CHILD_RING_GAP = 32;
-const SOURCE_LOCAL_FAN_MAX = Math.PI / 3;
+// Les sources restent accolées au post.
+// Elles prolongent localement l'axe contexte -> post.
+const POST_SOURCE_DISTANCE = 10;
+const SOURCE_CHILD_DISTANCE = 14;
+const SOURCE_CHILD_RING_GAP = 10;
+const SOURCE_LOCAL_FAN_MAX = Math.PI / 6;
 
 interface EventsControllerProps {
   onOpenContextSemantic: (
@@ -333,13 +332,8 @@ export const EventsController: FC<EventsControllerProps> = ({
         }
       }
 
-      // Micro-branche à +/- 45° de l'axe radial.
-      const branchSide =
-        postId % 2 === 0 ? 1 : -1;
-
-      const branchAngle =
-        radialAngle +
-        branchSide * POST_SOURCE_BRANCH_OFFSET;
+      // La source reste dans le prolongement immédiat du post.
+      const branchAngle = radialAngle;
 
       const perRing = 8;
 
@@ -356,8 +350,8 @@ export const EventsController: FC<EventsControllerProps> = ({
           countInRing <= 1
             ? 0
             : Math.min(
-                Math.PI / 4,
-                (countInRing - 1) * 0.14,
+                Math.PI / 12,
+                (countInRing - 1) * 0.08,
               );
 
         const angle =
@@ -370,7 +364,7 @@ export const EventsController: FC<EventsControllerProps> = ({
 
         const radius =
           POST_SOURCE_DISTANCE +
-          ring * 24;
+          ring * 10;
 
         if (!graph.hasNode(root.id)) {
           createNode(root.id, {
