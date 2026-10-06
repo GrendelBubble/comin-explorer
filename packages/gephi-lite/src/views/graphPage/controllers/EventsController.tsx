@@ -14,11 +14,18 @@ import {
 import { EVENTS, useEventsContext } from "../../../core/context/eventsContext";
 import { GephiLiteSigma } from "../../../core/graph/types";
 import { LayoutMapping } from "../../../core/layouts/types";
-import { fetchCominContextChildrenGraph } from "../../../core/comin/api";
+import {
+  fetchCominContextChildrenGraph,
+  fetchCominPostSourcesGraph,
+} from "../../../core/comin/api";
 import {
   CominContextChildPostNode,
   CominContextSemanticNode,
 } from "../../../core/comin/contextChildrenGraph";
+import {
+  CominPostSourceNode,
+  CominPostSourcesGraphResponse,
+} from "../../../core/comin/postSourcesGraph";
 import { bindUpHandler } from "../../../utils/events";
 
 const DRAG_EVENTS_TOLERANCE = 3;
@@ -56,11 +63,404 @@ export const EventsController: FC<EventsControllerProps> = ({
   >({ type: "idle" });
   const dragEventsCountRef = useRef(0);
   const expandedThemesRef = useRef(new Set<string>());
+  const expandedPostsRef = useRef(new Set<number>());
+  const expandedContainersRef = useRef(new Set<string>());
+  const postSourcesCacheRef = useRef(
+    new Map<number, CominPostSourcesGraphResponse>(),
+  );
+  const postClickTimerRef = useRef<
+    ReturnType<typeof setTimeout> | null
+  >(null);
 
   /**
    * Handle interaction events:
    */
   useEffect(() => {
+    const collapseSourceChildren = (
+      parentNodeId: string,
+    ) => {
+      const graph = graphDataset.fullGraph;
+
+      if (!graph.hasNode(parentNodeId)) return;
+
+      const childEdges = graph
+        .edges(parentNodeId)
+        .filter(
+          (edgeId) =>
+            graphDataset.edgeData[edgeId]?.type ===
+              "contains_source" &&
+            graph.source(edgeId) === parentNodeId,
+        );
+
+      childEdges.forEach((edgeId) => {
+        const childId = graph.target(edgeId);
+
+        collapseSourceChildren(childId);
+
+        expandedContainersRef.current.delete(childId);
+
+        if (graph.hasEdge(edgeId)) {
+          deleteItems("edges", [edgeId]);
+        }
+
+        if (graph.hasNode(childId)) {
+          deleteItems("nodes", [childId]);
+        }
+      });
+
+      expandedContainersRef.current.delete(parentNodeId);
+    };
+
+    const collapsePostSources = (
+      postNodeId: string,
+      postId: number,
+    ) => {
+      const graph = graphDataset.fullGraph;
+
+      if (!graph.hasNode(postNodeId)) return;
+
+      const rootEdges = graph
+        .edges(postNodeId)
+        .filter(
+          (edgeId) =>
+            graphDataset.edgeData[edgeId]?.type ===
+              "has_source" &&
+            graph.source(edgeId) === postNodeId,
+        );
+
+      rootEdges.forEach((edgeId) => {
+        const rootId = graph.target(edgeId);
+
+        collapseSourceChildren(rootId);
+
+        expandedContainersRef.current.delete(rootId);
+
+        if (graph.hasEdge(edgeId)) {
+          deleteItems("edges", [edgeId]);
+        }
+
+        if (graph.hasNode(rootId)) {
+          deleteItems("nodes", [rootId]);
+        }
+      });
+
+      expandedPostsRef.current.delete(postId);
+
+      if (sigma.getGraph().hasNode(postNodeId)) {
+        sigma.getGraph().setNodeAttribute(
+          postNodeId,
+          "cominSourcesExpanded",
+          false,
+        );
+      }
+    };
+
+    const placeChildren = (
+      parentNodeId: string,
+      children: CominPostSourceNode[],
+      postId: number,
+    ) => {
+      if (!children.length) return;
+
+      const graph = sigma.getGraph();
+      const parent = graph.getNodeAttributes(parentNodeId);
+
+      const postEntry = Object.entries(
+        graphDataset.nodeData,
+      ).find(
+        ([, data]) =>
+          data?.type === "post" &&
+          data.post_id === postId,
+      );
+
+      const postPosition =
+        postEntry && graph.hasNode(postEntry[0])
+          ? graph.getNodeAttributes(postEntry[0])
+          : { x: parent.x - 1, y: parent.y };
+
+      const direction = Math.atan2(
+        parent.y - postPosition.y,
+        parent.x - postPosition.x,
+      );
+
+      const perRing = 16;
+
+      children.forEach((child, index) => {
+        const ring = Math.floor(index / perRing);
+        const indexInRing = index % perRing;
+
+        const countInRing = Math.min(
+          perRing,
+          children.length - ring * perRing,
+        );
+
+        const span =
+          countInRing <= 1
+            ? 0
+            : Math.min(
+                Math.PI * 1.15,
+                Math.max(
+                  Math.PI / 2,
+                  (countInRing - 1) * 0.18,
+                ),
+              );
+
+        const angle =
+          countInRing <= 1
+            ? direction
+            : direction -
+              span / 2 +
+              (span * indexInRing) /
+                (countInRing - 1);
+
+        const radius = 105 + ring * 75;
+
+        if (!graphDataset.fullGraph.hasNode(child.id)) {
+          createNode(child.id, {
+            ...child,
+            cominPostId: postId,
+            x:
+              parent.x +
+              Math.cos(angle) * radius,
+            y:
+              parent.y +
+              Math.sin(angle) * radius,
+          });
+        }
+      });
+    };
+
+    const toggleContainer = async (
+      containerNodeId: string,
+      postId: number,
+    ) => {
+      if (
+        expandedContainersRef.current.has(
+          containerNodeId,
+        )
+      ) {
+        collapseSourceChildren(containerNodeId);
+        return;
+      }
+
+      let sourceGraph =
+        postSourcesCacheRef.current.get(postId);
+
+      if (!sourceGraph) {
+        sourceGraph =
+          await fetchCominPostSourcesGraph(postId);
+        postSourcesCacheRef.current.set(
+          postId,
+          sourceGraph,
+        );
+      }
+
+      const childEdges = sourceGraph.edges.filter(
+        (edge) =>
+          edge.type === "contains_source" &&
+          edge.source === containerNodeId,
+      );
+
+      const children = childEdges
+        .map((edge) =>
+          sourceGraph.nodes.find(
+            (node) => node.id === edge.target,
+          ),
+        )
+        .filter(
+          (
+            node,
+          ): node is CominPostSourceNode =>
+            node !== undefined,
+        );
+
+      placeChildren(
+        containerNodeId,
+        children,
+        postId,
+      );
+
+      childEdges.forEach((edge) => {
+        if (!graphDataset.fullGraph.hasEdge(edge.id)) {
+          createEdge(
+            edge.id,
+            {
+              type: edge.type,
+              position: edge.position,
+            },
+            edge.source,
+            edge.target,
+            false,
+          );
+        }
+      });
+
+      expandedContainersRef.current.add(
+        containerNodeId,
+      );
+    };
+
+    const togglePostSources = async (
+      postNodeId: string,
+      postId: number,
+    ) => {
+      if (expandedPostsRef.current.has(postId)) {
+        collapsePostSources(postNodeId, postId);
+        return;
+      }
+
+      Array.from(expandedPostsRef.current).forEach(
+        (expandedPostId) => {
+          const previous = Object.entries(
+            graphDataset.nodeData,
+          ).find(
+            ([, data]) =>
+              data?.type === "post" &&
+              data.post_id === expandedPostId,
+          );
+
+          if (previous) {
+            collapsePostSources(
+              previous[0],
+              expandedPostId,
+            );
+          }
+        },
+      );
+
+      let sourceGraph =
+        postSourcesCacheRef.current.get(postId);
+
+      if (!sourceGraph) {
+        sourceGraph =
+          await fetchCominPostSourcesGraph(postId);
+        postSourcesCacheRef.current.set(
+          postId,
+          sourceGraph,
+        );
+      }
+
+      const center =
+        sigma.getGraph().getNodeAttributes(
+          postNodeId,
+        );
+
+      const contextEdge =
+        graphDataset.fullGraph
+          .edges(postNodeId)
+          .find(
+            (edgeId) =>
+              graphDataset.edgeData[edgeId]?.type ===
+              "supported_by_post",
+          );
+
+      let outwardAngle = 0;
+
+      if (contextEdge) {
+        const contextId =
+          graphDataset.fullGraph.opposite(
+            postNodeId,
+            contextEdge,
+          );
+
+        if (
+          graphDataset.fullGraph.hasNode(
+            contextId,
+          )
+        ) {
+          const context =
+            sigma
+              .getGraph()
+              .getNodeAttributes(contextId);
+
+          outwardAngle = Math.atan2(
+            center.y - context.y,
+            center.x - context.x,
+          );
+        }
+      }
+
+      const rootEdges =
+        sourceGraph.edges.filter(
+          (edge) =>
+            edge.type === "has_source",
+        );
+
+      const roots = rootEdges
+        .map((edge) =>
+          sourceGraph.nodes.find(
+            (item) => item.id === edge.target,
+          ),
+        )
+        .filter(
+          (
+            item,
+          ): item is CominPostSourceNode =>
+            item !== undefined,
+        );
+
+      const span =
+        roots.length <= 1
+          ? 0
+          : Math.min(
+              Math.PI / 2,
+              (roots.length - 1) * 0.28,
+            );
+
+      roots.forEach((root, index) => {
+        const angle =
+          roots.length <= 1
+            ? outwardAngle
+            : outwardAngle -
+              span / 2 +
+              (span * index) /
+                (roots.length - 1);
+
+        if (
+          !graphDataset.fullGraph.hasNode(root.id)
+        ) {
+          createNode(root.id, {
+            ...root,
+            cominPostId: postId,
+            x:
+              center.x +
+              Math.cos(angle) * 115,
+            y:
+              center.y +
+              Math.sin(angle) * 115,
+          });
+        }
+      });
+
+      rootEdges.forEach((edge) => {
+        if (
+          !graphDataset.fullGraph.hasEdge(edge.id)
+        ) {
+          createEdge(
+            edge.id,
+            {
+              type: edge.type,
+              relation_type:
+                edge.relation_type,
+              source_path:
+                edge.source_path,
+            },
+            postNodeId,
+            edge.target,
+            false,
+          );
+        }
+      });
+
+      expandedPostsRef.current.add(postId);
+
+      sigma.getGraph().setNodeAttribute(
+        postNodeId,
+        "cominSourcesExpanded",
+        true,
+      );
+    };
+
     const collapseContext = (
       contextNodeId: string,
       themeId: string,
@@ -98,6 +498,22 @@ export const EventsController: FC<EventsControllerProps> = ({
               edgeId,
             ),
         );
+
+      postIds.forEach((postNodeId) => {
+        const postId =
+          graphDataset.nodeData[postNodeId]
+            ?.post_id;
+
+        if (
+          typeof postId === "number" &&
+          expandedPostsRef.current.has(postId)
+        ) {
+          collapsePostSources(
+            postNodeId,
+            postId,
+          );
+        }
+      });
 
       const removablePostIds = postIds.filter(
         (postId) => {
@@ -179,6 +595,64 @@ export const EventsController: FC<EventsControllerProps> = ({
           onOpenContextSemantic(
             nodeData as unknown as CominContextSemanticNode,
           );
+          return;
+        }
+
+        if (
+          nodeData?.type === "source" &&
+          typeof nodeData.url === "string" &&
+          nodeData.url
+        ) {
+          window.open(
+            nodeData.url,
+            "_blank",
+            "noopener,noreferrer",
+          );
+          return;
+        }
+
+        if (
+          nodeData?.type === "container"
+        ) {
+          const postId = Number(
+            (
+              nodeData as unknown as {
+                cominPostId?: number;
+              }
+            ).cominPostId,
+          );
+
+          if (postId > 0) {
+            await toggleContainer(
+              node,
+              postId,
+            );
+          }
+
+          return;
+        }
+
+        if (
+          nodeData?.type === "post" &&
+          typeof nodeData.post_id === "number" &&
+          !event.original.ctrlKey
+        ) {
+          if (postClickTimerRef.current) {
+            clearTimeout(
+              postClickTimerRef.current,
+            );
+          }
+
+          postClickTimerRef.current =
+            setTimeout(() => {
+              postClickTimerRef.current = null;
+
+              void togglePostSources(
+                node,
+                nodeData.post_id,
+              );
+            }, 260);
+
           return;
         }
 
@@ -470,6 +944,13 @@ export const EventsController: FC<EventsControllerProps> = ({
       doubleClickNode({ node, event }) {
         event.preventSigmaDefault();
 
+        if (postClickTimerRef.current) {
+          clearTimeout(
+            postClickTimerRef.current,
+          );
+          postClickTimerRef.current = null;
+        }
+
         const nodeData =
           graphDataset.nodeData[node];
 
@@ -562,6 +1043,13 @@ export const EventsController: FC<EventsControllerProps> = ({
 
     const unbind = bindUpHandler(upHandler);
     return () => {
+      if (postClickTimerRef.current) {
+        clearTimeout(
+          postClickTimerRef.current,
+        );
+        postClickTimerRef.current = null;
+      }
+
       unbind();
     };
   }, [

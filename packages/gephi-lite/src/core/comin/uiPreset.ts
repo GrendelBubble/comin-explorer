@@ -38,5 +38,13 @@ export const COMIN_UI = {
       color: "#9A9185",
       size: 2,
     },
+    hasSource: {
+      color: "#8FA397",
+      size: 1.5,
+    },
+    containsSource: {
+      color: "#B0A79A",
+      size: 1.5,
+    },
   },
 } as const;

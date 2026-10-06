@@ -142,3 +142,39 @@ export async function fetchCominPostNote(
 
   return data;
 }
+
+import type { CominPostSourcesGraphResponse } from "./postSourcesGraph";
+
+export async function fetchCominPostSourcesGraph(
+  postId: number,
+): Promise<CominPostSourcesGraphResponse> {
+  const response = await fetch(
+    `/comin-api/graph/posts/${encodeURIComponent(String(postId))}/sources`,
+    {
+      headers: {
+        Accept: "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Sources du post indisponibles : ${response.status}`,
+    );
+  }
+
+  const data =
+    (await response.json()) as CominPostSourcesGraphResponse;
+
+  if (
+    data.status !== "ok" ||
+    data.graph_version !== "post-sources-graph-v1" ||
+    data.post_id !== postId ||
+    !Array.isArray(data.nodes) ||
+    !Array.isArray(data.edges)
+  ) {
+    throw new Error("Graphe des sources invalide.");
+  }
+
+  return data;
+}

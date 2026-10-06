@@ -171,7 +171,8 @@ export const GraphRendering: FC = () => {
     (data) =>
       data?.type === "context" ||
       data?.type === "post" ||
-      data?.type === "source",
+      data?.type === "source" ||
+      data?.type === "container",
   );
   const { quality } = useLayoutState();
   const { hoveredNode, hoveredEdge, customCursor } = useSigmaState();

@@ -43,7 +43,8 @@ export const AppearanceController: FC = () => {
         data?.type === "context_semantic" ||
         data?.type === "context_unit" ||
         data?.type === "post" ||
-        data?.type === "source",
+        data?.type === "source" ||
+        data?.type === "container",
     );
 
     // what we've got in the state,
@@ -416,6 +417,9 @@ export const AppearanceController: FC = () => {
         } else if (nodeType === "source") {
           res.color = COMIN_UI.nodes.source.color;
           res.size = COMIN_UI.nodes.source.size;
+        } else if (nodeType === "container") {
+          res.color = COMIN_UI.nodes.structuralSource.color;
+          res.size = COMIN_UI.nodes.structuralSource.size;
         }
       }
 
@@ -424,7 +428,11 @@ export const AppearanceController: FC = () => {
       if (isCominGraph && !hoveredNode) {
         const nodeType = nodeData[id]?.type;
 
-        if (nodeType === "post") {
+        if (
+          nodeType === "post" ||
+          nodeType === "source" ||
+          nodeType === "container"
+        ) {
           res.hideLabel = true;
         }
 
@@ -539,6 +547,12 @@ export const AppearanceController: FC = () => {
               } else if (edgeType === "has_context_child") {
                 res.color = COMIN_UI.edges.hasContextChild.color;
                 res.size = COMIN_UI.edges.hasContextChild.size;
+              } else if (edgeType === "has_source") {
+                res.color = COMIN_UI.edges.hasSource.color;
+                res.size = COMIN_UI.edges.hasSource.size;
+              } else if (edgeType === "contains_source") {
+                res.color = COMIN_UI.edges.containsSource.color;
+                res.size = COMIN_UI.edges.containsSource.size;
               }
             }
 
