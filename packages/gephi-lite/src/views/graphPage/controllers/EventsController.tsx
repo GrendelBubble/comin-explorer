@@ -253,6 +253,21 @@ export const EventsController: FC<EventsControllerProps> = ({
         );
       }
 
+      // Lors d'une réouverture, les sources viennent du cache
+      // beaucoup plus vite que Sigma ne resynchronise les posts.
+      // Attendre explicitement que le post existe dans le graphe rendu.
+      for (let frame = 0; frame < 30; frame++) {
+        if (graph.hasNode(postNodeId)) break;
+
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => resolve());
+        });
+      }
+
+      if (!graph.hasNode(postNodeId)) {
+        return;
+      }
+
       // Toutes les racines PRIMARY du post, pas uniquement la première.
       const rootEdges = sourceGraph.edges.filter(
         (edge) =>
