@@ -101,3 +101,44 @@ export async function fetchCominContextChildrenGraph(
 
   return data;
 }
+
+
+export interface CominPostNoteResponse {
+  status: "ok";
+  post_id: number;
+  title: string;
+  note_hash: string;
+  markdown: string;
+}
+
+export async function fetchCominPostNote(
+  postId: number,
+): Promise<CominPostNoteResponse> {
+  const response = await fetch(
+    `/comin-api/graph/posts/${encodeURIComponent(String(postId))}/note`,
+    {
+      headers: {
+        Accept: "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Fiche de lecture indisponible : ${response.status}`,
+    );
+  }
+
+  const data =
+    (await response.json()) as CominPostNoteResponse;
+
+  if (
+    data.status !== "ok" ||
+    data.post_id !== postId ||
+    typeof data.markdown !== "string"
+  ) {
+    throw new Error("Fiche de lecture invalide.");
+  }
+
+  return data;
+}

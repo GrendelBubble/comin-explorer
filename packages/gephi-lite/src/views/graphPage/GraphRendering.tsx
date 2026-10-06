@@ -24,7 +24,10 @@ import {
   useSigmaGraph,
   useSigmaState,
 } from "../../core/context/dataContexts";
-import { CominContextSemanticNode } from "../../core/comin/contextChildrenGraph";
+import {
+  CominContextChildPostNode,
+  CominContextSemanticNode,
+} from "../../core/comin/contextChildrenGraph";
 import { COMIN_UI } from "../../core/comin/uiPreset";
 import { GRAPH_SELECTION_MODES } from "../../core/selection/types";
 import { resetCamera } from "../../core/sigma";
@@ -35,6 +38,10 @@ import { GridController } from "./controllers/GridController";
 import { SelectionController } from "./controllers/SelectionController";
 import { SettingsController } from "./controllers/SettingsController";
 import { ContextSemanticReader } from "./ContextSemanticReader";
+import {
+  PostNoteReader,
+  PostNoteReaderItem,
+} from "./PostNoteReader";
 
 function useFullScreen(): { toggle: () => void; isFullScreen: boolean } {
   const [isFullScreen, setFullScreen] = useState<boolean>(false);
@@ -154,6 +161,8 @@ const sigmaSettings: Partial<Settings> = {
 export const GraphRendering: FC = () => {
   const [contextSemanticItem, setContextSemanticItem] =
     useState<CominContextSemanticNode | null>(null);
+  const [postNoteItem, setPostNoteItem] =
+    useState<PostNoteReaderItem | null>(null);
   const { backgroundColor, layoutGridColor } = useAppearance();
   const { nodeData } = useGraphDataset();
   const sigmaGraph = useSigmaGraph();
@@ -191,6 +200,13 @@ export const GraphRendering: FC = () => {
       >
         <EventsController
           onOpenContextSemantic={setContextSemanticItem}
+          onOpenPostNote={(post: CominContextChildPostNode) =>
+            setPostNoteItem({
+              postId: post.post_id,
+              label: post.label,
+              url: post.url,
+            })
+          }
         />
         <AppearanceController />
         <SettingsController setIsReady={setReady} />
@@ -210,6 +226,10 @@ export const GraphRendering: FC = () => {
       <ContextSemanticReader
         item={contextSemanticItem}
         onClose={() => setContextSemanticItem(null)}
+      />
+      <PostNoteReader
+        item={postNoteItem}
+        onClose={() => setPostNoteItem(null)}
       />
     </>
   );

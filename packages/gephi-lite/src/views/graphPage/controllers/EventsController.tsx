@@ -15,7 +15,10 @@ import { EVENTS, useEventsContext } from "../../../core/context/eventsContext";
 import { GephiLiteSigma } from "../../../core/graph/types";
 import { LayoutMapping } from "../../../core/layouts/types";
 import { fetchCominContextChildrenGraph } from "../../../core/comin/api";
-import { CominContextSemanticNode } from "../../../core/comin/contextChildrenGraph";
+import {
+  CominContextChildPostNode,
+  CominContextSemanticNode,
+} from "../../../core/comin/contextChildrenGraph";
 import { bindUpHandler } from "../../../utils/events";
 
 const DRAG_EVENTS_TOLERANCE = 3;
@@ -24,10 +27,14 @@ interface EventsControllerProps {
   onOpenContextSemantic: (
     item: CominContextSemanticNode,
   ) => void;
+  onOpenPostNote: (
+    item: CominContextChildPostNode,
+  ) => void;
 }
 
 export const EventsController: FC<EventsControllerProps> = ({
   onOpenContextSemantic,
+  onOpenPostNote,
 }) => {
   const sigma: GephiLiteSigma = useSigma();
   const registerEvents = useRegisterEvents();
@@ -171,19 +178,6 @@ export const EventsController: FC<EventsControllerProps> = ({
         if (nodeData?.type === "context_semantic") {
           onOpenContextSemantic(
             nodeData as unknown as CominContextSemanticNode,
-          );
-          return;
-        }
-
-        if (
-          nodeData?.type === "post" &&
-          typeof nodeData.url === "string" &&
-          nodeData.url
-        ) {
-          window.open(
-            nodeData.url,
-            "_blank",
-            "noopener,noreferrer",
           );
           return;
         }
@@ -473,6 +467,22 @@ export const EventsController: FC<EventsControllerProps> = ({
           select({ type: "edges", items: new Set([edge]), replace: true });
         }
       },
+      doubleClickNode({ node, event }) {
+        event.preventSigmaDefault();
+
+        const nodeData =
+          graphDataset.nodeData[node];
+
+        if (
+          nodeData?.type === "post" &&
+          typeof nodeData.post_id === "number"
+        ) {
+          onOpenPostNote(
+            nodeData as unknown as CominContextChildPostNode,
+          );
+        }
+      },
+
       doubleClick(event: MouseCoords) {
         event.preventSigmaDefault();
       },
@@ -572,6 +582,7 @@ export const EventsController: FC<EventsControllerProps> = ({
     setNodePositions,
     globalEmitter,
     onOpenContextSemantic,
+    onOpenPostNote,
   ]);
 
   // DOM events not handled by sigma:
