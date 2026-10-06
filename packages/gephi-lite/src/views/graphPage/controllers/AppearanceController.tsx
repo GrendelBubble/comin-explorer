@@ -326,6 +326,213 @@ export const AppearanceController: FC = () => {
           attributes.cominExpanded === true,
       );
 
+    type CominContainerMask = {
+      minX: number;
+      maxX: number;
+      minY: number;
+      maxY: number;
+      protectedNodes: Set<string>;
+    };
+
+    const getExpandedContainerMask =
+      (): CominContainerMask | null => {
+        // Il ne peut y avoir qu'un seul container développé.
+        // Un container développé possède au moins une arête
+        // contains_source actuellement présente dans le graphe.
+        const containerId = graph
+          .nodes()
+          .find((nodeId) => {
+            if (
+              nodeData[nodeId]?.type !==
+              "container"
+            ) {
+              return false;
+            }
+
+            return graph
+              .edges(nodeId)
+              .some(
+                (edgeId) =>
+                  edgeData[edgeId]?.type ===
+                    "contains_source" &&
+                  graph.source(edgeId) === nodeId,
+              );
+          });
+
+        if (!containerId) return null;
+
+        const protectedNodes =
+          new Set<string>([containerId]);
+
+        const contentNodeIds: string[] = [];
+        const queue = [containerId];
+
+        // Inclure aussi les descendants éventuels
+        // d'un container imbriqué.
+        while (queue.length) {
+          const parentId = queue.shift();
+
+          if (!parentId) continue;
+
+          graph.edges(parentId).forEach(
+            (edgeId) => {
+              if (
+                edgeData[edgeId]?.type !==
+                  "contains_source" ||
+                graph.source(edgeId) !==
+                  parentId
+              ) {
+                return;
+              }
+
+              const childId =
+                graph.target(edgeId);
+
+              if (
+                protectedNodes.has(childId)
+              ) {
+                return;
+              }
+
+              protectedNodes.add(childId);
+              contentNodeIds.push(childId);
+
+              if (
+                nodeData[childId]?.type ===
+                "container"
+              ) {
+                queue.push(childId);
+              }
+            },
+          );
+        }
+
+        if (!contentNodeIds.length) {
+          return null;
+        }
+
+        const positions = contentNodeIds
+          .filter((nodeId) =>
+            graph.hasNode(nodeId),
+          )
+          .map((nodeId) => {
+            const attributes =
+              graph.getNodeAttributes(nodeId);
+
+            return {
+              x: Number(attributes.x),
+              y: Number(attributes.y),
+            };
+          })
+          .filter(
+            ({ x, y }) =>
+              Number.isFinite(x) &&
+              Number.isFinite(y),
+          );
+
+        if (!positions.length) {
+          return null;
+        }
+
+        // Marge autour des points de la grille :
+        // elle crée une véritable zone de lecture.
+        const margin = 12;
+
+        return {
+          minX:
+            Math.min(
+              ...positions.map(({ x }) => x),
+            ) - margin,
+          maxX:
+            Math.max(
+              ...positions.map(({ x }) => x),
+            ) + margin,
+          minY:
+            Math.min(
+              ...positions.map(({ y }) => y),
+            ) - margin,
+          maxY:
+            Math.max(
+              ...positions.map(({ y }) => y),
+            ) + margin,
+          protectedNodes,
+        };
+      };
+
+    const containerMask =
+      getExpandedContainerMask();
+
+    const pointInsideContainerMask = (
+      x: number,
+      y: number,
+    ) =>
+      containerMask !== null &&
+      x >= containerMask.minX &&
+      x <= containerMask.maxX &&
+      y >= containerMask.minY &&
+      y <= containerMask.maxY;
+
+    // Test d'intersection segment / rectangle.
+    // Cela permet aussi d'effacer les liens qui traversent
+    // la zone alors que leurs deux extrémités sont à l'extérieur.
+    const segmentIntersectsContainerMask = (
+      x1: number,
+      y1: number,
+      x2: number,
+      y2: number,
+    ) => {
+      if (!containerMask) return false;
+
+      if (
+        pointInsideContainerMask(x1, y1) ||
+        pointInsideContainerMask(x2, y2)
+      ) {
+        return true;
+      }
+
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+
+      const p = [
+        -dx,
+        dx,
+        -dy,
+        dy,
+      ];
+
+      const q = [
+        x1 - containerMask.minX,
+        containerMask.maxX - x1,
+        y1 - containerMask.minY,
+        containerMask.maxY - y1,
+      ];
+
+      let minT = 0;
+      let maxT = 1;
+
+      for (let index = 0; index < 4; index++) {
+        const pi = p[index];
+        const qi = q[index];
+
+        if (pi === 0) {
+          if (qi < 0) return false;
+          continue;
+        }
+
+        const ratio = qi / pi;
+
+        if (pi < 0) {
+          if (ratio > maxT) return false;
+          minT = Math.max(minT, ratio);
+        } else {
+          if (ratio < minT) return false;
+          maxT = Math.min(maxT, ratio);
+        }
+      }
+
+      return true;
+    };
+
     sigma.setSetting("nodeReducer", (id, attr) => {
       const contextIsExpanded =
         hasExpandedContexts();
@@ -519,6 +726,27 @@ export const AppearanceController: FC = () => {
         res.forceLabel = false;
       }
 
+      // La zone de contenu du container "efface"
+      // les éléments du graphe situés derrière elle.
+      // Les nœuds appartenant au container restent visibles.
+      if (
+        containerMask &&
+        !containerMask.protectedNodes.has(id)
+      ) {
+        const x = Number(attr.x);
+        const y = Number(attr.y);
+
+        if (
+          Number.isFinite(x) &&
+          Number.isFinite(y) &&
+          pointInsideContainerMask(x, y)
+        ) {
+          res.hidden = true;
+          res.hideLabel = true;
+          res.forceLabel = false;
+        }
+      }
+
       return res;
     });
     sigma.setSetting(
@@ -584,6 +812,81 @@ export const AppearanceController: FC = () => {
                   ? memoizedDarken(res.color || DEFAULT_EDGE_COLOR)
                   : memoizedBrighten(res.color || DEFAULT_EDGE_COLOR);
               res.zIndex = -1;
+            }
+
+            if (containerMask) {
+              const sourceId =
+                graph.source(id);
+
+              const targetId =
+                graph.target(id);
+
+              const edgeType =
+                edgeData[id]?.type;
+
+              // Les liens internes de la grille et le lien
+              // post -> container doivent rester visibles.
+              const belongsToContainer =
+                (
+                  edgeType ===
+                    "contains_source" &&
+                  containerMask.protectedNodes.has(
+                    sourceId,
+                  ) &&
+                  containerMask.protectedNodes.has(
+                    targetId,
+                  )
+                ) ||
+                (
+                  edgeType === "has_source" &&
+                  containerMask.protectedNodes.has(
+                    targetId,
+                  )
+                );
+
+              if (
+                !belongsToContainer &&
+                graph.hasNode(sourceId) &&
+                graph.hasNode(targetId)
+              ) {
+                const sourceAttributes =
+                  graph.getNodeAttributes(
+                    sourceId,
+                  );
+
+                const targetAttributes =
+                  graph.getNodeAttributes(
+                    targetId,
+                  );
+
+                const x1 = Number(
+                  sourceAttributes.x,
+                );
+                const y1 = Number(
+                  sourceAttributes.y,
+                );
+                const x2 = Number(
+                  targetAttributes.x,
+                );
+                const y2 = Number(
+                  targetAttributes.y,
+                );
+
+                if (
+                  Number.isFinite(x1) &&
+                  Number.isFinite(y1) &&
+                  Number.isFinite(x2) &&
+                  Number.isFinite(y2) &&
+                  segmentIntersectsContainerMask(
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                  )
+                ) {
+                  res.hidden = true;
+                }
+              }
             }
 
             return res;
