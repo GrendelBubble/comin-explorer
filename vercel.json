@@ -17,6 +17,10 @@
     {
       "source": "/comin-api/graph/contexts/:theme_id/children",
       "destination": "/api/comin/graph/contexts/:theme_id/children"
+    },
+    {
+      "source": "/comin-api/graph/posts/:post_id/note",
+      "destination": "/api/comin/graph/posts/:post_id/note"
     }
   ]
 }
