@@ -5,6 +5,7 @@ attribute float a_size;
 attribute float a_angle;
 attribute vec4 a_color;
 attribute vec4 a_borderColor;
+attribute float a_borderSize;
 
 uniform mat3 u_matrix;
 uniform float u_sizeRatio;
@@ -33,7 +34,10 @@ void main() {
   v_antiAliasingBorder = u_correctionRatio;
   v_diffVector = diffVector;
   v_radius = size / 2.0 / marginRatio;
-  v_borderThickness = min(5.0 * u_correctionRatio, v_radius / 2.0);
+  v_borderThickness = min(
+    a_borderSize * u_correctionRatio,
+    v_radius / 2.0
+  );
 
   #ifdef PICKING_MODE
   // For picking mode, we use the ID as both colors:

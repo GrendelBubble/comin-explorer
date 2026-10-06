@@ -27,6 +27,7 @@ export default class NodeProgramBorder extends NodeProgram<(typeof UNIFORMS)[num
         { name: "a_size", size: 1, type: FLOAT },
         { name: "a_color", size: 4, type: UNSIGNED_BYTE, normalized: true },
         { name: "a_borderColor", size: 4, type: UNSIGNED_BYTE, normalized: true },
+        { name: "a_borderSize", size: 1, type: FLOAT },
         { name: "a_id", size: 4, type: UNSIGNED_BYTE, normalized: true },
       ],
       CONSTANT_ATTRIBUTES: [{ name: "a_angle", size: 1, type: FLOAT }],
@@ -39,12 +40,17 @@ export default class NodeProgramBorder extends NodeProgram<(typeof UNIFORMS)[num
 
     const color = floatColor(data.color);
     const borderColor = floatColor(data.borderColor || data.color);
+    const borderSize =
+      (data as CustomNodeDisplayData & {
+        borderSize?: number;
+      }).borderSize ?? 5;
 
     array[startIndex++] = data.x;
     array[startIndex++] = data.y;
     array[startIndex++] = data.size;
     array[startIndex++] = color;
     array[startIndex++] = borderColor;
+    array[startIndex++] = borderSize;
     array[startIndex++] = nodeIndex;
   }
 

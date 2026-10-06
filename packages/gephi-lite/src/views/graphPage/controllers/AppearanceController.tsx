@@ -319,12 +319,15 @@ export const AppearanceController: FC = () => {
       return acceptedIds;
     };
 
-    const hasExpandedContexts = graph.someNode(
-      (_node, attributes) =>
-        attributes.cominExpanded === true,
-    );
+    const hasExpandedContexts = () =>
+      graph.someNode(
+        (_node, attributes) =>
+          attributes.cominExpanded === true,
+      );
 
     sigma.setSetting("nodeReducer", (id, attr) => {
+      const contextIsExpanded =
+        hasExpandedContexts();
       const res = structuredClone(attr) as Partial<CustomNodeDisplayData> & {
         cominRadialLabel?: boolean;
         cominLabelPlacement?:
@@ -335,6 +338,7 @@ export const AppearanceController: FC = () => {
         cominLabelLaneIndex?: number;
         cominLabelLaneCount?: number;
         cominLabelLaneMinSinGap?: number;
+        borderSize?: number;
       };
 
       const cominNodeData = nodeData[id] as
@@ -376,7 +380,7 @@ export const AppearanceController: FC = () => {
 
         if (nodeType === "context") {
           res.color =
-            hasExpandedContexts && !isExpandedContext
+            contextIsExpanded && !isExpandedContext
               ? memoizedBrighten(
                   COMIN_UI.nodes.context.color,
                 )
@@ -384,7 +388,7 @@ export const AppearanceController: FC = () => {
           res.size = COMIN_UI.nodes.context.size;
 
           if (
-            hasExpandedContexts &&
+            contextIsExpanded &&
             !isExpandedContext
           ) {
             res.zIndex = -1;
@@ -406,6 +410,7 @@ export const AppearanceController: FC = () => {
           // le contour sombre assure leur lisibilité sur le fond.
           res.borderColor =
             COMIN_UI.nodes.post.borderColor;
+          res.borderSize = 2.5;
           res.type = "bordered";
           res.size = COMIN_UI.nodes.post.size;
         } else if (nodeType === "source") {
@@ -424,7 +429,7 @@ export const AppearanceController: FC = () => {
         }
 
         if (nodeType === "context") {
-          if (hasExpandedContexts) {
+          if (contextIsExpanded) {
             if (isExpandedContext) {
               res.forceLabel = true;
               res.hideLabel = false;
@@ -446,7 +451,7 @@ export const AppearanceController: FC = () => {
       }
 
       const isExpandedContextChild =
-        hasExpandedContexts &&
+        contextIsExpanded &&
         (
           nodeData[id]?.type === "post" ||
           nodeData[id]?.type === "context_semantic"
@@ -492,6 +497,9 @@ export const AppearanceController: FC = () => {
       !showEdges.value
         ? () => ({ hidden: true })
         : (id, { weight, ...attr }) => {
+            const contextIsExpanded =
+              hasExpandedContexts();
+
             const res = {
               ...attr,
               size: weight,
@@ -515,7 +523,7 @@ export const AppearanceController: FC = () => {
                   ) === true;
 
                 res.color =
-                  hasExpandedContexts &&
+                  contextIsExpanded &&
                   !touchesExpandedContext
                     ? memoizedBrighten(
                         COMIN_UI.edges.related.color,
