@@ -23,14 +23,49 @@ export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
           </a>
         ),
         table: ({ children, ...props }) => (
-          <div style={{ overflowX: "auto" }}>
+          <div style={{ overflowX: "auto", margin: "1.5rem 0" }}>
             <table
               {...props}
-              className="table table-bordered"
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                border: "1px solid #cfc7bb",
+                borderRadius: "8px",
+                overflow: "hidden",
+              }}
             >
               {children}
             </table>
           </div>
+        ),
+        th: ({ children, ...props }) => (
+          <th
+            {...props}
+            style={{
+              padding: "0.75rem 1rem",
+              textAlign: "left",
+              verticalAlign: "top",
+              background: "#eee9e1",
+              color: "#294c60",
+              fontWeight: 700,
+              border: "1px solid #d7d0c5",
+            }}
+          >
+            {children}
+          </th>
+        ),
+        td: ({ children, ...props }) => (
+          <td
+            {...props}
+            style={{
+              padding: "0.75rem 1rem",
+              textAlign: "left",
+              verticalAlign: "top",
+              border: "1px solid #e2ddd5",
+            }}
+          >
+            {children}
+          </td>
         ),
       }}
     >
