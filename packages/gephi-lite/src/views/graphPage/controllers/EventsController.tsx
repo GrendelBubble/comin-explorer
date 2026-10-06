@@ -30,6 +30,15 @@ import { bindUpHandler } from "../../../utils/events";
 
 const DRAG_EVENTS_TOLERANCE = 3;
 
+// Les sources forment un micro-arbre local autour du post.
+// Elles ne prolongent jamais l'axe radial contexte -> post.
+const POST_SOURCE_BRANCH_OFFSET = Math.PI / 4;
+const POST_SOURCE_DISTANCE = 34;
+const SOURCE_CHILD_DISTANCE = 46;
+const SOURCE_CHILD_RING_GAP = 32;
+const SOURCE_LOCAL_FAN_MAX = Math.PI / 3;
+const POST_SINGLE_CLICK_DELAY_MS = 220;
+
 interface EventsControllerProps {
   onOpenContextSemantic: (
     item: CominContextSemanticNode,
@@ -183,7 +192,7 @@ export const EventsController: FC<EventsControllerProps> = ({
         parent.x - postPosition.x,
       );
 
-      const perRing = 16;
+      const perRing = 8;
 
       children.forEach((child, index) => {
         const ring = Math.floor(index / perRing);
@@ -198,11 +207,8 @@ export const EventsController: FC<EventsControllerProps> = ({
           countInRing <= 1
             ? 0
             : Math.min(
-                Math.PI * 1.15,
-                Math.max(
-                  Math.PI / 2,
-                  (countInRing - 1) * 0.18,
-                ),
+                SOURCE_LOCAL_FAN_MAX,
+                (countInRing - 1) * 0.16,
               );
 
         const angle =
@@ -213,7 +219,9 @@ export const EventsController: FC<EventsControllerProps> = ({
               (span * indexInRing) /
                 (countInRing - 1);
 
-        const radius = 105 + ring * 75;
+        const radius =
+          SOURCE_CHILD_DISTANCE +
+          ring * SOURCE_CHILD_RING_GAP;
 
         if (!graphDataset.fullGraph.hasNode(child.id)) {
           createNode(child.id, {
@@ -228,6 +236,229 @@ export const EventsController: FC<EventsControllerProps> = ({
           });
         }
       });
+    };
+
+    const expandPostSources = async (
+      postNodeId: string,
+      postId: number,
+    ) => {
+      const graph = sigma.getGraph();
+
+      if (!graph.hasNode(postNodeId)) return;
+
+      let sourceGraph =
+        postSourcesCacheRef.current.get(postId);
+
+      if (!sourceGraph) {
+        sourceGraph =
+          await fetchCominPostSourcesGraph(postId);
+
+        postSourcesCacheRef.current.set(
+          postId,
+          sourceGraph,
+        );
+      }
+
+      // Toutes les racines PRIMARY du post, pas uniquement la première.
+      const rootEdges = sourceGraph.edges.filter(
+        (edge) =>
+          edge.type === "has_source" &&
+          edge.source === postNodeId,
+      );
+
+      const roots = rootEdges
+        .map((edge) => ({
+          edge,
+          node: sourceGraph!.nodes.find(
+            (item) => item.id === edge.target,
+          ),
+        }))
+        .filter(
+          (
+            item,
+          ): item is {
+            edge: (typeof rootEdges)[number];
+            node: CominPostSourceNode;
+          } => item.node !== undefined,
+        );
+
+      if (!roots.length) {
+        expandedPostsRef.current.delete(postId);
+
+        graph.setNodeAttribute(
+          postNodeId,
+          "cominSourcesExpanded",
+          false,
+        );
+
+        return;
+      }
+
+      // Retrouver l'axe contexte -> post.
+      const supportingEdgeId = graph
+        .edges(postNodeId)
+        .find(
+          (edgeId) =>
+            graphDataset.edgeData[edgeId]?.type ===
+              "supported_by_post" &&
+            graph.target(edgeId) === postNodeId,
+        );
+
+      const postPosition =
+        graph.getNodeAttributes(postNodeId);
+
+      let radialAngle = 0;
+
+      if (supportingEdgeId) {
+        const contextNodeId =
+          graph.source(supportingEdgeId);
+
+        if (graph.hasNode(contextNodeId)) {
+          const contextPosition =
+            graph.getNodeAttributes(contextNodeId);
+
+          radialAngle = Math.atan2(
+            postPosition.y - contextPosition.y,
+            postPosition.x - contextPosition.x,
+          );
+        }
+      }
+
+      // Micro-branche à +/- 45° de l'axe radial.
+      const branchSide =
+        postId % 2 === 0 ? 1 : -1;
+
+      const branchAngle =
+        radialAngle +
+        branchSide * POST_SOURCE_BRANCH_OFFSET;
+
+      const perRing = 8;
+
+      roots.forEach(({ edge, node: root }, index) => {
+        const ring = Math.floor(index / perRing);
+        const indexInRing = index % perRing;
+
+        const countInRing = Math.min(
+          perRing,
+          roots.length - ring * perRing,
+        );
+
+        const span =
+          countInRing <= 1
+            ? 0
+            : Math.min(
+                Math.PI / 4,
+                (countInRing - 1) * 0.14,
+              );
+
+        const angle =
+          countInRing <= 1
+            ? branchAngle
+            : branchAngle -
+              span / 2 +
+              (span * indexInRing) /
+                (countInRing - 1);
+
+        const radius =
+          POST_SOURCE_DISTANCE +
+          ring * 24;
+
+        if (!graph.hasNode(root.id)) {
+          createNode(root.id, {
+            ...root,
+            cominPostId: postId,
+            x:
+              postPosition.x +
+              Math.cos(angle) * radius,
+            y:
+              postPosition.y +
+              Math.sin(angle) * radius,
+          });
+        }
+
+        if (!graph.hasEdge(edge.id)) {
+          createEdge(
+            edge.id,
+            {
+              type: edge.type,
+              relation_type:
+                edge.relation_type,
+              source_path:
+                edge.source_path,
+            },
+            edge.source,
+            edge.target,
+            false,
+          );
+        }
+      });
+
+      expandedPostsRef.current.add(postId);
+
+      graph.setNodeAttribute(
+        postNodeId,
+        "cominSourcesExpanded",
+        true,
+      );
+    };
+
+    const showPostSources = async (
+      postNodeId: string,
+      postId: number,
+    ) => {
+      // Un seul micro-arbre de sources visible à la fois.
+      Array.from(
+        expandedPostsRef.current,
+      ).forEach((expandedPostId) => {
+        if (expandedPostId === postId) return;
+
+        const expandedPostEntry =
+          Object.entries(
+            graphDataset.nodeData,
+          ).find(
+            ([, data]) =>
+              data?.type === "post" &&
+              data.post_id === expandedPostId,
+          );
+
+        if (expandedPostEntry) {
+          collapsePostSources(
+            expandedPostEntry[0],
+            expandedPostId,
+          );
+        } else {
+          expandedPostsRef.current.delete(
+            expandedPostId,
+          );
+        }
+      });
+
+      // Même si les données sont déjà en cache,
+      // reconstruire les nœuds/arêtes à chaque réouverture.
+      await expandPostSources(
+        postNodeId,
+        postId,
+      );
+    };
+
+    const togglePostSources = async (
+      postNodeId: string,
+      postId: number,
+    ) => {
+      if (
+        expandedPostsRef.current.has(postId)
+      ) {
+        collapsePostSources(
+          postNodeId,
+          postId,
+        );
+        return;
+      }
+
+      await showPostSources(
+        postNodeId,
+        postId,
+      );
     };
 
     const toggleContainer = async (
@@ -488,6 +719,31 @@ export const EventsController: FC<EventsControllerProps> = ({
 
         if (event.original.ctrlKey) return;
 
+        if (
+          nodeData?.type === "post" &&
+          typeof nodeData.post_id === "number"
+        ) {
+          const postId = nodeData.post_id;
+
+          if (postClickTimerRef.current) {
+            clearTimeout(
+              postClickTimerRef.current,
+            );
+          }
+
+          postClickTimerRef.current =
+            setTimeout(() => {
+              postClickTimerRef.current = null;
+
+              void togglePostSources(
+                node,
+                postId,
+              );
+            }, POST_SINGLE_CLICK_DELAY_MS);
+
+          return;
+        }
+
         if (nodeData?.type !== "context") return;
 
         const themeId = nodeData.theme_id;
@@ -734,99 +990,10 @@ export const EventsController: FC<EventsControllerProps> = ({
             }
           });
 
-          // Chaque post affiche immédiatement sa racine
-          // documentaire éventuelle. Le container reste
-          // replié jusqu'au clic utilisateur.
-          await Promise.all(
-            posts.map(async (post) => {
-              try {
-                let sourceGraph =
-                  postSourcesCacheRef.current.get(
-                    post.post_id,
-                  );
-
-                if (!sourceGraph) {
-                  sourceGraph =
-                    await fetchCominPostSourcesGraph(
-                      post.post_id,
-                    );
-
-                  postSourcesCacheRef.current.set(
-                    post.post_id,
-                    sourceGraph,
-                  );
-                }
-
-                const rootEdge =
-                  sourceGraph.edges.find(
-                    (edge) =>
-                      edge.type === "has_source",
-                  );
-
-                if (!rootEdge) return;
-
-                const root =
-                  sourceGraph.nodes.find(
-                    (item) =>
-                      item.id === rootEdge.target,
-                  );
-
-                if (!root) return;
-
-                const graph = sigma.getGraph();
-
-                if (!graph.hasNode(post.id)) return;
-
-                const postPosition =
-                  graph.getNodeAttributes(post.id);
-
-                const angle = Math.atan2(
-                  postPosition.y - center.y,
-                  postPosition.x - center.x,
-                );
-
-                const rootDistance = 38;
-
-                if (!graph.hasNode(root.id)) {
-                  createNode(root.id, {
-                    ...root,
-                    cominPostId: post.post_id,
-                    x:
-                      postPosition.x +
-                      Math.cos(angle) *
-                        rootDistance,
-                    y:
-                      postPosition.y +
-                      Math.sin(angle) *
-                        rootDistance,
-                  });
-                }
-
-                if (!graph.hasEdge(rootEdge.id)) {
-                  createEdge(
-                    rootEdge.id,
-                    {
-                      type: rootEdge.type,
-                      relation_type:
-                        rootEdge.relation_type,
-                      source_path:
-                        rootEdge.source_path,
-                    },
-                    post.id,
-                    root.id,
-                    false,
-                  );
-                }
-
-                expandedPostsRef.current.add(
-                  post.post_id,
-                );
-              } catch {
-                // Un post sans racine exploitable reste
-                // simplement affiché seul.
-              }
-            }),
-          );
+          /*
+           * Les sources ne sont plus ouvertes automatiquement avec
+           * tous les posts : cela évite la vue en "hérisson".
+           */
         } catch (error) {
           expandedThemesRef.current.delete(themeId);
           sigma.getGraph().setNodeAttribute(
@@ -850,7 +1017,7 @@ export const EventsController: FC<EventsControllerProps> = ({
           select({ type: "edges", items: new Set([edge]), replace: true });
         }
       },
-      doubleClickNode({ node, event }) {
+      async doubleClickNode({ node, event }) {
         event.preventSigmaDefault();
 
         if (postClickTimerRef.current) {
@@ -867,6 +1034,11 @@ export const EventsController: FC<EventsControllerProps> = ({
           nodeData?.type === "post" &&
           typeof nodeData.post_id === "number"
         ) {
+          await showPostSources(
+            node,
+            nodeData.post_id,
+          );
+
           onOpenPostNote(
             nodeData as unknown as CominContextChildPostNode,
           );
