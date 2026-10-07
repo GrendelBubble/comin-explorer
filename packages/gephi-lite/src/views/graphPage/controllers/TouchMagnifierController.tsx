@@ -359,6 +359,379 @@ export const TouchMagnifierController: FC = () => {
         LENS_SIZE /
         LENS_ZOOM;
 
+      const sourceHalf =
+        sourceSize / 2;
+
+      const graph =
+        sigma.getGraph();
+
+      /*
+       * Transformation :
+       *
+       * coordonnées viewport Sigma
+       *            ->
+       * coordonnées dans la loupe.
+       */
+      const toLens = (
+        x: number,
+        y: number,
+      ) => ({
+        x:
+          LENS_SIZE / 2 +
+          (x - centerX) *
+            LENS_ZOOM,
+        y:
+          LENS_SIZE / 2 +
+          (y - centerY) *
+            LENS_ZOOM,
+      });
+
+      /*
+       * Les arêtes et les nœuds sont rendus
+       * directement à partir des display data Sigma.
+       *
+       * On ne dépend donc plus de la copie
+       * des canvases WebGL.
+       */
+
+      context.lineCap = "round";
+      context.lineJoin = "round";
+
+      // ------------------------------------------------------
+      // ARÊTES
+      // ------------------------------------------------------
+
+      graph.forEachEdge(
+        (
+          edgeId,
+          _attributes,
+          sourceId,
+          targetId,
+        ) => {
+          const displayData =
+            sigma.getEdgeDisplayData(
+              edgeId,
+            );
+
+          if (
+            !displayData ||
+            displayData.hidden
+          ) {
+            return;
+          }
+
+          if (
+            !graph.hasNode(sourceId) ||
+            !graph.hasNode(targetId)
+          ) {
+            return;
+          }
+
+          const source =
+            graph.getNodeAttributes(
+              sourceId,
+            );
+
+          const target =
+            graph.getNodeAttributes(
+              targetId,
+            );
+
+          const sourceX =
+            Number(source.x);
+
+          const sourceY =
+            Number(source.y);
+
+          const targetX =
+            Number(target.x);
+
+          const targetY =
+            Number(target.y);
+
+          if (
+            !Number.isFinite(sourceX) ||
+            !Number.isFinite(sourceY) ||
+            !Number.isFinite(targetX) ||
+            !Number.isFinite(targetY)
+          ) {
+            return;
+          }
+
+          const sourceViewport =
+            sigma.graphToViewport({
+              x: sourceX,
+              y: sourceY,
+            });
+
+          const targetViewport =
+            sigma.graphToViewport({
+              x: targetX,
+              y: targetY,
+            });
+
+          /*
+           * Rejet rapide des segments très loin
+           * de la zone observée.
+           */
+          if (
+            Math.max(
+              sourceViewport.x,
+              targetViewport.x,
+            ) <
+              centerX -
+                sourceHalf ||
+            Math.min(
+              sourceViewport.x,
+              targetViewport.x,
+            ) >
+              centerX +
+                sourceHalf ||
+            Math.max(
+              sourceViewport.y,
+              targetViewport.y,
+            ) <
+              centerY -
+                sourceHalf ||
+            Math.min(
+              sourceViewport.y,
+              targetViewport.y,
+            ) >
+              centerY +
+                sourceHalf
+          ) {
+            return;
+          }
+
+          const from =
+            toLens(
+              sourceViewport.x,
+              sourceViewport.y,
+            );
+
+          const to =
+            toLens(
+              targetViewport.x,
+              targetViewport.y,
+            );
+
+          const rawSize =
+            Number(
+              displayData.size,
+            );
+
+          const size =
+            Number.isFinite(rawSize)
+              ? rawSize
+              : 1;
+
+          context.beginPath();
+
+          context.moveTo(
+            from.x,
+            from.y,
+          );
+
+          context.lineTo(
+            to.x,
+            to.y,
+          );
+
+          context.strokeStyle =
+            typeof displayData.color ===
+              "string"
+              ? displayData.color
+              : "#C8CDD0";
+
+          context.lineWidth =
+            Math.max(
+              0.65,
+              sigma.scaleSize(size) *
+                LENS_ZOOM,
+            );
+
+          context.stroke();
+        },
+      );
+
+      // ------------------------------------------------------
+      // NŒUDS
+      // ------------------------------------------------------
+
+      graph.forEachNode(
+        (
+          nodeId,
+          attributes,
+        ) => {
+          const displayData =
+            sigma.getNodeDisplayData(
+              nodeId,
+            );
+
+          if (
+            !displayData ||
+            displayData.hidden
+          ) {
+            return;
+          }
+
+          const graphX =
+            Number(attributes.x);
+
+          const graphY =
+            Number(attributes.y);
+
+          if (
+            !Number.isFinite(graphX) ||
+            !Number.isFinite(graphY)
+          ) {
+            return;
+          }
+
+          const viewport =
+            sigma.graphToViewport({
+              x: graphX,
+              y: graphY,
+            });
+
+          const rawSize =
+            Number(
+              displayData.size,
+            );
+
+          const size =
+            Number.isFinite(rawSize)
+              ? rawSize
+              : 1;
+
+          const radius =
+            Math.max(
+              1.5,
+              sigma.scaleSize(size) *
+                LENS_ZOOM,
+            );
+
+          if (
+            viewport.x + radius <
+              centerX -
+                sourceHalf ||
+            viewport.x - radius >
+              centerX +
+                sourceHalf ||
+            viewport.y + radius <
+              centerY -
+                sourceHalf ||
+            viewport.y - radius >
+              centerY +
+                sourceHalf
+          ) {
+            return;
+          }
+
+          const position =
+            toLens(
+              viewport.x,
+              viewport.y,
+            );
+
+          const style =
+            displayData as typeof displayData & {
+              type?: string;
+              borderColor?: string;
+              borderSize?: number;
+            };
+
+          const fillColor =
+            typeof displayData.color ===
+              "string"
+              ? displayData.color
+              : "#999999";
+
+          const borderColor =
+            typeof style.borderColor ===
+              "string"
+              ? style.borderColor
+              : null;
+
+          const rawBorderSize =
+            Number(
+              style.borderSize,
+            );
+
+          const borderSize =
+            Number.isFinite(
+              rawBorderSize,
+            )
+              ? rawBorderSize *
+                LENS_ZOOM
+              : 0;
+
+          context.beginPath();
+
+          if (
+            style.type ===
+            "diamond"
+          ) {
+            context.moveTo(
+              position.x,
+              position.y -
+                radius,
+            );
+
+            context.lineTo(
+              position.x +
+                radius,
+              position.y,
+            );
+
+            context.lineTo(
+              position.x,
+              position.y +
+                radius,
+            );
+
+            context.lineTo(
+              position.x -
+                radius,
+              position.y,
+            );
+
+            context.closePath();
+          } else {
+            context.arc(
+              position.x,
+              position.y,
+              radius,
+              0,
+              Math.PI * 2,
+            );
+          }
+
+          context.fillStyle =
+            fillColor;
+
+          context.fill();
+
+          if (
+            borderColor &&
+            borderSize > 0
+          ) {
+            context.strokeStyle =
+              borderColor;
+
+            context.lineWidth =
+              borderSize;
+
+            context.stroke();
+          }
+        },
+      );
+
+      /*
+       * Les labels Sigma sont eux rendus en Canvas 2D.
+       * Ils peuvent être recopiés sans dépendre du
+       * drawing buffer WebGL.
+       */
       const container =
         sigma.getContainer();
 
@@ -374,19 +747,27 @@ export const TouchMagnifierController: FC = () => {
         centerY;
 
       const canvases =
-        Array.from(
-          container.querySelectorAll<HTMLCanvasElement>(
-            "canvas",
-          ),
-        ).filter(
-          (canvas) =>
-            canvas !== lens &&
-            canvas.width > 0 &&
-            canvas.height > 0,
-        );
+        sigma.getCanvases();
 
-      canvases.forEach(
-        (canvas) => {
+      const textLayers = [
+        "edgeLabels",
+        "labels",
+        "hovers",
+      ];
+
+      textLayers.forEach(
+        (layer) => {
+          const canvas =
+            canvases[layer];
+
+          if (
+            !canvas ||
+            canvas.width <= 0 ||
+            canvas.height <= 0
+          ) {
+            return;
+          }
+
           const rect =
             canvas.getBoundingClientRect();
 
