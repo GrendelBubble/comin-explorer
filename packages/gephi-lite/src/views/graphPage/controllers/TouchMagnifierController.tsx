@@ -9,23 +9,29 @@ import {
 import { TouchCoords } from "sigma/types";
 
 import {
+  useGraphDataset,
   useSigmaActions,
 } from "../../../core/context/dataContexts";
 import { COMIN_UI } from "../../../core/comin/uiPreset";
 
 const LONG_PRESS_MS = 220;
-
-// Tant que le doigt reste dans ce rayon,
-// on considère qu'il attend éventuellement la loupe.
-// Au-delà, le geste redevient immédiatement un pan normal.
 const START_MOVE_TOLERANCE = 8;
 
-const LENS_SIZE = 112;
+const LENS_SIZE = 120;
 const LENS_ZOOM = 2.2;
 
-// Zone tactile volontairement plus large
-// que la pastille réellement affichée.
+// Rayon de recherche pendant le "survol tactile".
 const TOUCH_HIT_RADIUS = 30;
+
+// Rayon réel utilisé lorsqu'on tape dans la loupe.
+// Comme la loupe agrandit 2.2x, cela donne déjà
+// une cible tactile confortable.
+const LENS_TAP_HIT_RADIUS = 16;
+
+type Position = {
+  left: number;
+  top: number;
+};
 
 type TouchState = {
   startX: number;
@@ -37,6 +43,7 @@ type TouchState = {
 
 export const TouchMagnifierController: FC = () => {
   const sigma = useSigma();
+  const { nodeData } = useGraphDataset();
 
   const {
     setHoveredNode,
@@ -45,6 +52,9 @@ export const TouchMagnifierController: FC = () => {
 
   const lensRef =
     useRef<HTMLCanvasElement | null>(null);
+
+  const lensPositionRef =
+    useRef<Position | null>(null);
 
   const touchRef =
     useRef<TouchState | null>(null);
@@ -55,11 +65,23 @@ export const TouchMagnifierController: FC = () => {
   const touchHoveredNodeRef =
     useRef<string | null>(null);
 
-  const [lensPosition, setLensPosition] =
-    useState<{
-      left: number;
-      top: number;
-    } | null>(null);
+  const lastLensTouchRef =
+    useRef(0);
+
+  const [lensPosition, setLensPositionState] =
+    useState<Position | null>(null);
+
+  const setLensPosition = useCallback(
+    (position: Position | null) => {
+      lensPositionRef.current =
+        position;
+
+      setLensPositionState(
+        position,
+      );
+    },
+    [],
+  );
 
   const clearTimer = useCallback(() => {
     if (timerRef.current !== null) {
@@ -96,16 +118,19 @@ export const TouchMagnifierController: FC = () => {
       ],
     );
 
-  /**
-   * Recherche le nœud le plus proche du doigt.
-   *
-   * x/y sont déjà exprimés dans le repère viewport
-   * du container Sigma.
-   */
+  const clearLens = useCallback(() => {
+    setLensPosition(null);
+    setTouchHoveredNode(null);
+  }, [
+    setLensPosition,
+    setTouchHoveredNode,
+  ]);
+
   const pickNearestNode = useCallback(
     (
       x: number,
       y: number,
+      radius = TOUCH_HIT_RADIUS,
     ) => {
       const graph =
         sigma.getGraph();
@@ -160,8 +185,7 @@ export const TouchMagnifierController: FC = () => {
           );
 
         if (
-          distance <=
-            TOUCH_HIT_RADIUS &&
+          distance <= radius &&
           distance < bestDistance
         ) {
           bestDistance =
@@ -177,82 +201,80 @@ export const TouchMagnifierController: FC = () => {
     [sigma],
   );
 
-  const positionLens =
-    useCallback(
-      (
-        x: number,
-        y: number,
-      ) => {
-        const rect =
-          sigma
-            .getContainer()
-            .getBoundingClientRect();
+  /*
+   * Le cercle lui-même est désormais le point
+   * d'exploration.
+   *
+   * Il reste centré sous le doigt, sauf au bord
+   * de l'écran où on le contraint simplement
+   * à rester visible.
+   */
+  const positionLens = useCallback(
+    (
+      x: number,
+      y: number,
+    ): Position => {
+      const rect =
+        sigma
+          .getContainer()
+          .getBoundingClientRect();
 
-        const half =
-          LENS_SIZE / 2;
+      const half =
+        LENS_SIZE / 2;
 
-        const margin = 8;
+      const margin = 6;
 
-        const clamp = (
-          value: number,
-          min: number,
-          max: number,
-        ) =>
-          Math.max(
-            min,
-            Math.min(
-              max,
-              value,
-            ),
-          );
+      const clamp = (
+        value: number,
+        min: number,
+        max: number,
+      ) =>
+        Math.max(
+          min,
+          Math.min(max, value),
+        );
 
-        const left = clamp(
+      const position = {
+        left: clamp(
           x,
           half + margin,
           rect.width -
             half -
             margin,
-        );
+        ),
 
-        // Afficher normalement la loupe
-        // au-dessus du doigt.
-        let top =
-          y -
-          half -
-          46;
-
-        // Si nous sommes trop près du haut,
-        // la placer sous le doigt.
-        if (
-          top - half <
-          margin
-        ) {
-          top =
-            y +
-            half +
-            46;
-        }
-
-        top = clamp(
-          top,
+        top: clamp(
+          y,
           half + margin,
           rect.height -
             half -
             margin,
-        );
+        ),
+      };
 
-        setLensPosition({
-          left,
-          top,
-        });
-      },
-      [sigma],
-    );
+      setLensPosition(
+        position,
+      );
 
+      return position;
+    },
+    [
+      setLensPosition,
+      sigma,
+    ],
+  );
+
+  /*
+   * La zone copiée est centrée sur LE CENTRE
+   * DE LA LOUPE.
+   *
+   * La zone agrandie correspond donc réellement
+   * à ce qui se trouve sous le cercle.
+   */
   const drawLens = useCallback(
     (
-      x: number,
-      y: number,
+      centerX: number,
+      centerY: number,
     ) => {
       const lens =
         lensRef.current;
@@ -268,10 +290,8 @@ export const TouchMagnifierController: FC = () => {
         );
 
       if (
-        lens.width !==
-          pixelSize ||
-        lens.height !==
-          pixelSize
+        lens.width !== pixelSize ||
+        lens.height !== pixelSize
       ) {
         lens.width =
           pixelSize;
@@ -344,6 +364,14 @@ export const TouchMagnifierController: FC = () => {
       const containerRect =
         container.getBoundingClientRect();
 
+      const centerClientX =
+        containerRect.left +
+        centerX;
+
+      const centerClientY =
+        containerRect.top +
+        centerY;
+
       const canvases =
         Array.from(
           container.querySelectorAll<HTMLCanvasElement>(
@@ -376,28 +404,24 @@ export const TouchMagnifierController: FC = () => {
             canvas.height /
             rect.height;
 
-          // x/y sont relatifs au container Sigma.
-          // Les convertir dans le repère du canvas.
-          const canvasX =
-            x +
-            containerRect.left -
+          const canvasCenterX =
+            centerClientX -
             rect.left;
 
-          const canvasY =
-            y +
-            containerRect.top -
+          const canvasCenterY =
+            centerClientY -
             rect.top;
 
           const sx =
             (
-              canvasX -
+              canvasCenterX -
               sourceSize / 2
             ) *
             scaleX;
 
           const sy =
             (
-              canvasY -
+              canvasCenterY -
               sourceSize / 2
             ) *
             scaleY;
@@ -451,25 +475,33 @@ export const TouchMagnifierController: FC = () => {
       x: number,
       y: number,
     ) => {
-      positionLens(x, y);
+      const position =
+        positionLens(x, y);
 
-      drawLens(x, y);
+      /*
+       * Le dessin ET le hit-test utilisent
+       * exactement le même centre.
+       */
+      drawLens(
+        position.left,
+        position.top,
+      );
 
       const nodeId =
         pickNearestNode(
-          x,
-          y,
+          position.left,
+          position.top,
         );
 
       setTouchHoveredNode(
         nodeId,
       );
 
-      // Le hover modifie éventuellement
-      // le rendu du nœud. Redessiner la loupe
-      // juste après ce rafraîchissement.
       requestAnimationFrame(() => {
-        drawLens(x, y);
+        drawLens(
+          position.left,
+          position.top,
+        );
       });
     },
     [
@@ -480,74 +512,205 @@ export const TouchMagnifierController: FC = () => {
     ],
   );
 
-  const stopExploration =
+  /*
+   * Convertit un point tapé DANS LA LOUPE
+   * vers sa position originale dans le graphe.
+   */
+  const activateLensPoint =
     useCallback(
       (
-        suppressTap: boolean,
+        clientX: number,
+        clientY: number,
       ) => {
-        clearTimer();
+        const lens =
+          lensRef.current;
 
-        const state =
-          touchRef.current;
+        const lensPosition =
+          lensPositionRef.current;
 
         if (
-          state?.active &&
-          suppressTap
+          !lens ||
+          !lensPosition
         ) {
-          sigma.getContainer().dataset
-            .cominSuppressTapUntil =
-            String(
-              Date.now() + 500,
-            );
+          return;
         }
 
-        touchRef.current =
-          null;
+        const rect =
+          lens.getBoundingClientRect();
 
-        setLensPosition(null);
+        const localX =
+          clientX -
+          rect.left;
 
-        setTouchHoveredNode(null);
+        const localY =
+          clientY -
+          rect.top;
+
+        const dx =
+          localX -
+          rect.width / 2;
+
+        const dy =
+          localY -
+          rect.height / 2;
+
+        /*
+         * Un déplacement de 22 px dans une
+         * loupe à 2.2x représente 10 px
+         * dans le graphe original.
+         */
+        const sourceX =
+          lensPosition.left +
+          dx / LENS_ZOOM;
+
+        const sourceY =
+          lensPosition.top +
+          dy / LENS_ZOOM;
+
+        const nodeId =
+          pickNearestNode(
+            sourceX,
+            sourceY,
+            LENS_TAP_HIT_RADIUS,
+          );
+
+        if (!nodeId) {
+          return;
+        }
+
+        setTouchHoveredNode(
+          nodeId,
+        );
+
+        const data =
+          nodeData[nodeId];
+
+        /*
+         * Pour une source, ouvrir directement
+         * depuis le vrai geste utilisateur.
+         * Cela évite les bloqueurs de pop-up.
+         */
+        if (
+          data?.type === "source" &&
+          typeof data.url ===
+            "string" &&
+          data.url
+        ) {
+          window.open(
+            data.url,
+            "_blank",
+            "noopener,noreferrer",
+          );
+
+          clearLens();
+
+          return;
+        }
+
+        const graph =
+          sigma.getGraph();
+
+        if (
+          !graph.hasNode(nodeId)
+        ) {
+          return;
+        }
+
+        const attributes =
+          graph.getNodeAttributes(
+            nodeId,
+          );
+
+        const viewport =
+          sigma.graphToViewport({
+            x: attributes.x,
+            y: attributes.y,
+          });
+
+        const container =
+          sigma.getContainer();
+
+        const containerRect =
+          container.getBoundingClientRect();
+
+        /*
+         * Le tap d'origine doit rester inhibé,
+         * mais le clic explicitement demandé
+         * dans la loupe doit passer.
+         */
+        container.dataset
+          .cominSuppressTapUntil = "0";
+
+        /*
+         * On réinjecte un clic exactement au
+         * centre réel du nœud.
+         *
+         * EventsController conserve donc toutes
+         * les règles normales :
+         * - post -> Markdown
+         * - container -> ouvrir / fermer
+         * - contexte -> développer
+         * - contexte sémantique -> lecteur
+         */
+        container.dispatchEvent(
+          new MouseEvent(
+            "click",
+            {
+              bubbles: true,
+              cancelable: true,
+              view: window,
+              button: 0,
+              clientX:
+                containerRect.left +
+                viewport.x,
+              clientY:
+                containerRect.top +
+                viewport.y,
+            },
+          ),
+        );
+
+        clearLens();
       },
       [
-        clearTimer,
+        clearLens,
+        nodeData,
+        pickNearestNode,
         setTouchHoveredNode,
         sigma,
       ],
     );
 
+  /*
+   * Interaction tactile avec le graphe.
+   *
+   * Aucun test "pointer: coarse" :
+   * un PC tactile produit lui aussi les
+   * événements du TouchCaptor Sigma.
+   */
   useEffect(() => {
-    const coarsePointer =
-      window.matchMedia(
-        "(hover: none), (pointer: coarse)",
-      );
+    const container =
+      sigma.getContainer();
 
-    if (!coarsePointer.matches) {
-      return;
-    }
-
-    /*
-     * IMPORTANT :
-     *
-     * Nous utilisons directement le TouchCaptor Sigma.
-     *
-     * Son événement touchmove est émis AVANT que Sigma
-     * ne déplace sa caméra.
-     *
-     * appeler event.preventSigmaDefault() ici empêche donc
-     * réellement le pan du graphe.
-     */
     const touchCaptor =
       sigma.getTouchCaptor();
 
     const onTouchDown = (
       event: TouchCoords,
     ) => {
-      // Le pinch à deux doigts reste entièrement
-      // géré par Sigma.
+      /*
+       * Toute nouvelle interaction sur le graphe
+       * hors loupe ferme d'abord la loupe persistante.
+       */
+      clearLens();
+
       if (
         event.touches.length !== 1
       ) {
-        stopExploration(false);
+        clearTimer();
+        touchRef.current =
+          null;
+
         return;
       }
 
@@ -575,10 +738,6 @@ export const TouchMagnifierController: FC = () => {
 
           state.active = true;
 
-          /*
-           * À partir de maintenant, tout touchmove
-           * sera détourné en "survol tactile".
-           */
           exploreAt(
             state.lastX,
             state.lastY,
@@ -597,7 +756,13 @@ export const TouchMagnifierController: FC = () => {
       if (
         event.touches.length !== 1
       ) {
-        stopExploration(false);
+        clearTimer();
+
+        touchRef.current =
+          null;
+
+        clearLens();
+
         return;
       }
 
@@ -626,11 +791,8 @@ export const TouchMagnifierController: FC = () => {
           START_MOVE_TOLERANCE
         ) {
           /*
-           * Geste suffisamment franc :
-           * ce n'est pas une exploration.
-           *
-           * On annule le timer et on laisse
-           * Sigma poursuivre son pan normal.
+           * Balayage franc :
+           * laisser Sigma déplacer le graphe.
            */
           clearTimer();
 
@@ -641,9 +803,8 @@ export const TouchMagnifierController: FC = () => {
         }
 
         /*
-         * Petits mouvements pendant les 220 ms :
-         * on bloque le graphe afin qu'il ne dérive
-         * pas avant l'activation de la loupe.
+         * Petit mouvement pendant l'attente :
+         * empêcher le graphe de dériver.
          */
         event.preventSigmaDefault();
 
@@ -651,11 +812,9 @@ export const TouchMagnifierController: FC = () => {
       }
 
       /*
-       * MODE LOUPE ACTIF
+       * LOUPE ACTIVE :
        *
-       * Cette ligne est le point essentiel :
-       * le TouchCaptor de Sigma ne déplacera
-       * PAS la caméra pour ce mouvement.
+       * neutralise totalement le pan Sigma.
        */
       event.preventSigmaDefault();
 
@@ -668,13 +827,38 @@ export const TouchMagnifierController: FC = () => {
     const onTouchUp = (
       _event: TouchCoords,
     ) => {
-      const wasActive =
-        touchRef.current
-          ?.active === true;
+      clearTimer();
 
-      stopExploration(
-        wasActive,
-      );
+      const state =
+        touchRef.current;
+
+      if (!state) return;
+
+      if (state.active) {
+        /*
+         * Neutralise le tap que Sigma générerait
+         * éventuellement au relâchement.
+         */
+        container.dataset
+          .cominSuppressTapUntil =
+          String(
+            Date.now() + 500,
+          );
+
+        /*
+         * IMPORTANT :
+         * ne PAS supprimer la loupe.
+         *
+         * Elle devient persistante et cliquable.
+         */
+        touchRef.current =
+          null;
+
+        return;
+      }
+
+      touchRef.current =
+        null;
     };
 
     touchCaptor.on(
@@ -710,13 +894,194 @@ export const TouchMagnifierController: FC = () => {
         onTouchUp,
       );
 
-      stopExploration(false);
+      touchRef.current =
+        null;
     };
   }, [
+    clearLens,
     clearTimer,
     exploreAt,
     sigma,
-    stopExploration,
+  ]);
+
+  /*
+   * Une fois persistante, la loupe devient
+   * une véritable surface tactile / souris.
+   */
+  useEffect(() => {
+    const lens =
+      lensRef.current;
+
+    if (!lens) return;
+
+    let touchStart:
+      | {
+          x: number;
+          y: number;
+        }
+      | null = null;
+
+    const onTouchStart = (
+      event: TouchEvent,
+    ) => {
+      if (
+        event.touches.length !== 1
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const touch =
+        event.touches[0];
+
+      touchStart = {
+        x: touch.clientX,
+        y: touch.clientY,
+      };
+    };
+
+    const onTouchMove = (
+      event: TouchEvent,
+    ) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    const onTouchEnd = (
+      event: TouchEvent,
+    ) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const touch =
+        event.changedTouches[0];
+
+      if (
+        !touch ||
+        !touchStart
+      ) {
+        touchStart = null;
+        return;
+      }
+
+      const distance =
+        Math.hypot(
+          touch.clientX -
+            touchStart.x,
+          touch.clientY -
+            touchStart.y,
+        );
+
+      touchStart = null;
+
+      if (distance > 12) {
+        return;
+      }
+
+      lastLensTouchRef.current =
+        Date.now();
+
+      activateLensPoint(
+        touch.clientX,
+        touch.clientY,
+      );
+    };
+
+    const onMouseDown = (
+      event: MouseEvent,
+    ) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    const onClick = (
+      event: MouseEvent,
+    ) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      /*
+       * Sur certains navigateurs, un touchend
+       * est suivi d'un click synthétique.
+       */
+      if (
+        Date.now() -
+          lastLensTouchRef.current <
+        700
+      ) {
+        return;
+      }
+
+      activateLensPoint(
+        event.clientX,
+        event.clientY,
+      );
+    };
+
+    lens.addEventListener(
+      "touchstart",
+      onTouchStart,
+      {
+        passive: false,
+      },
+    );
+
+    lens.addEventListener(
+      "touchmove",
+      onTouchMove,
+      {
+        passive: false,
+      },
+    );
+
+    lens.addEventListener(
+      "touchend",
+      onTouchEnd,
+      {
+        passive: false,
+      },
+    );
+
+    lens.addEventListener(
+      "mousedown",
+      onMouseDown,
+    );
+
+    lens.addEventListener(
+      "click",
+      onClick,
+    );
+
+    return () => {
+      lens.removeEventListener(
+        "touchstart",
+        onTouchStart,
+      );
+
+      lens.removeEventListener(
+        "touchmove",
+        onTouchMove,
+      );
+
+      lens.removeEventListener(
+        "touchend",
+        onTouchEnd,
+      );
+
+      lens.removeEventListener(
+        "mousedown",
+        onMouseDown,
+      );
+
+      lens.removeEventListener(
+        "click",
+        onClick,
+      );
+    };
+  }, [
+    activateLensPoint,
   ]);
 
   return (
@@ -744,7 +1109,15 @@ export const TouchMagnifierController: FC = () => {
             ? 1
             : 0,
         pointerEvents:
+          lensPosition
+            ? "auto"
+            : "none",
+        touchAction:
           "none",
+        cursor:
+          lensPosition
+            ? "pointer"
+            : "default",
         zIndex: 25,
         boxShadow:
           "0 4px 14px rgba(0,0,0,0.22)",
