@@ -641,6 +641,16 @@ export const EventsController: FC<EventsControllerProps> = ({
       return until > Date.now();
     };
 
+    const closeMagnifier = () => {
+      sigma
+        .getContainer()
+        .dispatchEvent(
+          new CustomEvent(
+            "comin-close-magnifier",
+          ),
+        );
+    };
+
     const activateNode = async (
       node: string,
       ctrlKey = false,
@@ -651,6 +661,8 @@ export const EventsController: FC<EventsControllerProps> = ({
         const nodeData = graphDataset.nodeData[node];
 
         if (nodeData?.type === "context_semantic") {
+          closeMagnifier();
+
           onOpenContextSemantic(
             nodeData as unknown as CominContextSemanticNode,
           );
@@ -662,6 +674,8 @@ export const EventsController: FC<EventsControllerProps> = ({
           typeof nodeData.url === "string" &&
           nodeData.url
         ) {
+          closeMagnifier();
+
           window.open(
             nodeData.url,
             "_blank",
@@ -741,6 +755,8 @@ export const EventsController: FC<EventsControllerProps> = ({
               );
             }
           });
+
+          closeMagnifier();
 
           onOpenPostNote(
             nodeData as unknown as CominContextChildPostNode,

@@ -715,6 +715,37 @@ export const TouchMagnifierController: FC = () => {
     );
 
   /*
+   * Un lecteur Markdown ou une source externe peut demander
+   * explicitement la fermeture de la loupe.
+   */
+  useEffect(() => {
+    const container =
+      sigma.getContainer();
+
+    const onCloseMagnifier = () => {
+      clearTimer();
+      touchRef.current = null;
+      clearLens();
+    };
+
+    container.addEventListener(
+      "comin-close-magnifier",
+      onCloseMagnifier,
+    );
+
+    return () => {
+      container.removeEventListener(
+        "comin-close-magnifier",
+        onCloseMagnifier,
+      );
+    };
+  }, [
+    clearLens,
+    clearTimer,
+    sigma,
+  ]);
+
+  /*
    * Interaction tactile avec le graphe.
    *
    * Aucun test "pointer: coarse" :
@@ -731,12 +762,6 @@ export const TouchMagnifierController: FC = () => {
     const onTouchDown = (
       event: TouchCoords,
     ) => {
-      /*
-       * Toute nouvelle interaction sur le graphe
-       * hors loupe ferme d'abord la loupe persistante.
-       */
-      clearLens();
-
       if (
         event.touches.length !== 1
       ) {
@@ -754,13 +779,32 @@ export const TouchMagnifierController: FC = () => {
 
       clearTimer();
 
+      const resumeExistingLens =
+        lensPositionRef.current !== null;
+
       touchRef.current = {
         startX: point.x,
         startY: point.y,
         lastX: point.x,
         lastY: point.y,
-        active: false,
+        active: resumeExistingLens,
       };
+
+      /*
+       * Loupe déjà ouverte :
+       * le nouveau contact reprend immédiatement
+       * le balayage sans nouvel appui long.
+       */
+      if (resumeExistingLens) {
+        event.preventSigmaDefault();
+
+        exploreAt(
+          point.x,
+          point.y,
+        );
+
+        return;
+      }
 
       timerRef.current =
         window.setTimeout(() => {
@@ -971,6 +1015,7 @@ export const TouchMagnifierController: FC = () => {
           pointerId: number;
           x: number;
           y: number;
+          moved: boolean;
         }
       | null = null;
 
@@ -993,6 +1038,7 @@ export const TouchMagnifierController: FC = () => {
           event.clientX,
         y:
           event.clientY,
+        moved: false,
       };
 
       try {
@@ -1017,6 +1063,35 @@ export const TouchMagnifierController: FC = () => {
 
       event.preventDefault();
       event.stopPropagation();
+
+      const distance =
+        Math.hypot(
+          event.clientX -
+            pointerStart.x,
+          event.clientY -
+            pointerStart.y,
+        );
+
+      if (
+        distance <=
+        START_MOVE_TOLERANCE
+      ) {
+        return;
+      }
+
+      pointerStart.moved = true;
+
+      const containerRect =
+        sigma
+          .getContainer()
+          .getBoundingClientRect();
+
+      exploreAt(
+        event.clientX -
+          containerRect.left,
+        event.clientY -
+          containerRect.top,
+      );
     };
 
     const onPointerUp = (
@@ -1041,6 +1116,11 @@ export const TouchMagnifierController: FC = () => {
             pointerStart.y,
         );
 
+      const moved =
+        pointerStart.moved ||
+        distance >
+          START_MOVE_TOLERANCE;
+
       pointerStart = null;
 
       try {
@@ -1051,14 +1131,9 @@ export const TouchMagnifierController: FC = () => {
         // Capture éventuellement déjà libérée.
       }
 
-      if (distance > 20) {
-        return;
-      }
-
       /*
        * Un PointerEvent tactile peut être suivi
-       * d'un click synthétique. Le mémoriser
-       * évite une double activation.
+       * d'un click synthétique.
        */
       if (
         event.pointerType !==
@@ -1066,6 +1141,15 @@ export const TouchMagnifierController: FC = () => {
       ) {
         lastLensTouchRef.current =
           Date.now();
+      }
+
+      /*
+       * Un glissement repositionne simplement
+       * la loupe. Seul un véritable tap active
+       * le nœud situé dans la loupe.
+       */
+      if (moved) {
+        return;
       }
 
       activateLensPoint(
@@ -1162,6 +1246,8 @@ export const TouchMagnifierController: FC = () => {
     };
   }, [
     activateLensPoint,
+    exploreAt,
+    sigma,
   ]);
 
   const containerRect =
