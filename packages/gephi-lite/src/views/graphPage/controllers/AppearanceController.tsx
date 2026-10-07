@@ -713,14 +713,12 @@ export const AppearanceController: FC = () => {
         res.forceLabel = false;
       }
 
-      // Sources et containers utilisent le cartouche HTML.
-      // Aucun titre Sigma ne doit traverser la grille.
+      // Dans Com'In, seuls les contextes conservent
+      // un libellé spatial dans Sigma.
+      // Tous les autres types utilisent le cartouche fixe.
       if (
         isCominGraph &&
-        (
-          nodeData[id]?.type === "source" ||
-          nodeData[id]?.type === "container"
-        )
+        nodeData[id]?.type !== "context"
       ) {
         res.hideLabel = true;
         res.forceLabel = false;

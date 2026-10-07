@@ -1,4 +1,4 @@
-import { SigmaContainer, useSigma } from "@react-sigma/core";
+import { SigmaContainer } from "@react-sigma/core";
 import { createNodeImageProgram } from "@sigma/node-image";
 import cx from "classnames";
 import { FC, useCallback, useEffect, useState } from "react";
@@ -137,163 +137,20 @@ const GraphCaptionLayer: FC = () => {
   );
 };
 
-const CominSourceHoverLabel: FC = () => {
-  const sigma = useSigma();
-  const { nodeData, edgeData } = useGraphDataset();
+const CominHoverLabel: FC = () => {
+  const { nodeData } = useGraphDataset();
   const { hoveredNode } = useSigmaState();
 
-  const [position, setPosition] = useState<{
-    left: number;
-    top: number;
-  } | null>(null);
+  if (!hoveredNode) return null;
 
-  const updatePosition = useCallback(() => {
-    if (!hoveredNode) {
-      setPosition(null);
-      return;
-    }
+  const data = nodeData[hoveredNode];
 
-    const nodeType =
-      nodeData[hoveredNode]?.type;
-
-    if (
-      nodeType !== "source" &&
-      nodeType !== "container"
-    ) {
-      setPosition(null);
-      return;
-    }
-
-    const graph = sigma.getGraph();
-
-    if (!graph.hasNode(hoveredNode)) {
-      setPosition(null);
-      return;
-    }
-
-    let containerId: string | null = null;
-
-    if (nodeType === "container") {
-      containerId = hoveredNode;
-    } else {
-      const parentEdge = graph
-        .edges(hoveredNode)
-        .find(
-          (edgeId) =>
-            edgeData[edgeId]?.type ===
-              "contains_source" &&
-            graph.target(edgeId) ===
-              hoveredNode,
-        );
-
-      if (parentEdge) {
-        containerId =
-          graph.source(parentEdge);
-      }
-    }
-
-    let points: Array<{
-      x: number;
-      y: number;
-    }> = [];
-
-    if (
-      containerId &&
-      graph.hasNode(containerId)
-    ) {
-      const childIds = graph
-        .edges(containerId)
-        .filter(
-          (edgeId) =>
-            edgeData[edgeId]?.type ===
-              "contains_source" &&
-            graph.source(edgeId) ===
-              containerId,
-        )
-        .map((edgeId) =>
-          graph.target(edgeId),
-        )
-        .filter((childId) =>
-          graph.hasNode(childId),
-        );
-
-      points = childIds.map((childId) => {
-        const attributes =
-          graph.getNodeAttributes(childId);
-
-        return sigma.graphToViewport({
-          x: attributes.x,
-          y: attributes.y,
-        });
-      });
-    }
-
-    if (!points.length) {
-      const attributes =
-        graph.getNodeAttributes(hoveredNode);
-
-      points = [
-        sigma.graphToViewport({
-          x: attributes.x,
-          y: attributes.y,
-        }),
-      ];
-    }
-
-    const minX = Math.min(
-      ...points.map(({ x }) => x),
-    );
-
-    const maxX = Math.max(
-      ...points.map(({ x }) => x),
-    );
-
-    const minY = Math.min(
-      ...points.map(({ y }) => y),
-    );
-
-    setPosition({
-      left: (minX + maxX) / 2,
-      top: minY,
-    });
-  }, [
-    edgeData,
-    hoveredNode,
-    nodeData,
-    sigma,
-  ]);
-
-  useEffect(() => {
-    updatePosition();
-
-    const camera = sigma.getCamera();
-
-    camera.on("updated", updatePosition);
-
-    return () => {
-      camera.off(
-        "updated",
-        updatePosition,
-      );
-    };
-  }, [sigma, updatePosition]);
-
-  if (!hoveredNode || !position) {
+  // Les contextes gardent leur libellé spatial actuel.
+  if (!data || data.type === "context") {
     return null;
   }
 
-  const nodeType =
-    nodeData[hoveredNode]?.type;
-
-  if (
-    nodeType !== "source" &&
-    nodeType !== "container"
-  ) {
-    return null;
-  }
-
-  const rawLabel =
-    nodeData[hoveredNode]?.label;
+  const rawLabel = data.label;
 
   const label =
     typeof rawLabel === "string"
@@ -302,24 +159,49 @@ const CominSourceHoverLabel: FC = () => {
 
   if (!label) return null;
 
+  let borderColor: string =
+    COMIN_UI.nodes.post.borderColor;
+
+  if (
+    data.type === "context_semantic" ||
+    data.type === "context_unit"
+  ) {
+    borderColor =
+      COMIN_UI.nodes.contextSemantic.color;
+  } else if (data.type === "post") {
+    borderColor =
+      typeof data.post_type_color === "string" &&
+      data.post_type_color.trim()
+        ? data.post_type_color
+        : COMIN_UI.nodes.post.color;
+  } else if (data.type === "source") {
+    borderColor =
+      COMIN_UI.nodes.source.color;
+  } else if (data.type === "container") {
+    borderColor =
+      COMIN_UI.nodes.structuralSource.borderColor;
+  }
+
   return (
     <div
       className="position-absolute"
       style={{
-        left: position.left,
-        top: position.top,
-        transform:
-          "translate(-50%, calc(-100% - 10px))",
-        maxWidth: 420,
-        padding: "6px 10px",
+        left: "50%",
+        top: 12,
+        transform: "translateX(-50%)",
+        maxWidth: "70%",
+        padding: "7px 12px",
         backgroundColor: COMIN_UI.background,
-        border: "1px solid #B0A79A",
-        borderRadius: 6,
+        border: `2px solid ${borderColor}`,
+        borderRadius: 8,
         fontSize: 14,
-        lineHeight: 1.25,
+        lineHeight: 1.3,
+        fontWeight: 500,
         textAlign: "center",
         pointerEvents: "none",
-        zIndex: 20,
+        zIndex: 30,
+        boxShadow:
+          "0 2px 8px rgba(0, 0, 0, 0.08)",
       }}
     >
       {label}
@@ -373,6 +255,11 @@ export const GraphRendering: FC = () => {
     setIsReady(true);
   }, [setIsReady]);
 
+  const closeTransientPanels = useCallback(() => {
+    setContextSemanticItem(null);
+    setPostNoteItem(null);
+  }, []);
+
   return (
     <>
       <SigmaContainer
@@ -400,10 +287,11 @@ export const GraphRendering: FC = () => {
               url: post.url,
             })
           }
+          onCloseTransientPanels={closeTransientPanels}
         />
         <AppearanceController />
         <SettingsController setIsReady={setReady} />
-        <CominSourceHoverLabel />
+        <CominHoverLabel />
         <div className="sigma-layers">
           {quality.enabled && quality.showGrid && quality.metric?.deltaMax && (
             <GridController

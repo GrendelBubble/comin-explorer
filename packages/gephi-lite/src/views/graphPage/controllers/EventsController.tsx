@@ -48,11 +48,13 @@ interface EventsControllerProps {
   onOpenPostNote: (
     item: CominContextChildPostNode,
   ) => void;
+  onCloseTransientPanels: () => void;
 }
 
 export const EventsController: FC<EventsControllerProps> = ({
   onOpenContextSemantic,
   onOpenPostNote,
+  onCloseTransientPanels,
 }) => {
   const sigma: GephiLiteSigma = useSigma();
   const registerEvents = useRegisterEvents();
@@ -1051,10 +1053,24 @@ export const EventsController: FC<EventsControllerProps> = ({
         };
       },
       clickStage(e) {
-        // Reset the selection when clicking on the stage
-        // except when ctrl is pressed to add node in selection
-        // with the marquee selector
-        if (!e.event.original.ctrlKey) emptySelection();
+        // Ctrl reste réservé à la sélection multiple.
+        if (e.event.original.ctrlKey) return;
+
+        // Un clic dans le vide ferme tous les objets
+        // temporaires mais conserve le contexte développé.
+        Array.from(
+          expandedContainersRef.current,
+        ).forEach((containerId) => {
+          collapseSourceChildren(containerId);
+        });
+
+        expandedContainersRef.current.clear();
+
+        onCloseTransientPanels();
+
+        emptySelection();
+        resetHoveredNode();
+        resetHoveredEdge();
       },
       moveBody: (e) => {
         const dragState = dragStateRef.current;
@@ -1127,6 +1143,7 @@ export const EventsController: FC<EventsControllerProps> = ({
     globalEmitter,
     onOpenContextSemantic,
     onOpenPostNote,
+    onCloseTransientPanels,
   ]);
 
   // DOM events not handled by sigma:
