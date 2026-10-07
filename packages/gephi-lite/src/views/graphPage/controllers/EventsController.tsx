@@ -32,7 +32,7 @@ const DRAG_EVENTS_TOLERANCE = 3;
 
 // Les sources restent accolées au post.
 // Elles prolongent localement l'axe contexte -> post.
-const POST_SOURCE_DISTANCE = 10;
+const POST_SOURCE_DISTANCE = 24;
 
 // Un container ouvert déploie ses enfants dans une petite grille,
 // pas dans un nouvel éventail radial.
@@ -630,24 +630,10 @@ export const EventsController: FC<EventsControllerProps> = ({
       return until > Date.now();
     };
 
-    registerEvents({
-      enterEdge({ edge }) {
-        if (dragStateRef.current.type !== "idle") return;
-        setHoveredEdge(edge);
-      },
-      leaveEdge() {
-        if (dragStateRef.current.type !== "idle") return;
-        resetHoveredEdge();
-      },
-      enterNode({ node }) {
-        if (dragStateRef.current.type !== "idle") return;
-        setHoveredNode(node);
-      },
-      leaveNode() {
-        if (dragStateRef.current.type !== "idle") return;
-        resetHoveredNode();
-      },
-      async clickNode({ node, event }) {
+    const activateNode = async (
+      node: string,
+      ctrlKey = false,
+    ) => {
         if (suppressTouchTap()) return;
         if (dragEventsCountRef.current >= DRAG_EVENTS_TOLERANCE) return;
 
@@ -694,7 +680,7 @@ export const EventsController: FC<EventsControllerProps> = ({
           return;
         }
 
-        if (event.original.ctrlKey) {
+        if (ctrlKey) {
           toggle({
             type: "nodes",
             item: node,
@@ -709,7 +695,7 @@ export const EventsController: FC<EventsControllerProps> = ({
           select({ type: "nodes", items: new Set([node]), replace: true });
         }
 
-        if (event.original.ctrlKey) return;
+        if (ctrlKey) return;
 
         if (
           nodeData?.type === "post" &&
@@ -1025,6 +1011,30 @@ export const EventsController: FC<EventsControllerProps> = ({
           );
           throw error;
         }
+    };
+
+    registerEvents({
+      enterEdge({ edge }) {
+        if (dragStateRef.current.type !== "idle") return;
+        setHoveredEdge(edge);
+      },
+      leaveEdge() {
+        if (dragStateRef.current.type !== "idle") return;
+        resetHoveredEdge();
+      },
+      enterNode({ node }) {
+        if (dragStateRef.current.type !== "idle") return;
+        setHoveredNode(node);
+      },
+      leaveNode() {
+        if (dragStateRef.current.type !== "idle") return;
+        resetHoveredNode();
+      },
+      async clickNode({ node, event }) {
+        await activateNode(
+          node,
+          event.original.ctrlKey,
+        );
       },
 
       clickEdge({ edge, event }) {
@@ -1135,6 +1145,37 @@ export const EventsController: FC<EventsControllerProps> = ({
       },
     });
 
+    const activateNodeFromLabel = (
+      event: Event,
+    ) => {
+      const customEvent =
+        event as CustomEvent<{
+          nodeId?: string;
+        }>;
+
+      const nodeId =
+        customEvent.detail?.nodeId;
+
+      if (
+        typeof nodeId !== "string" ||
+        !graphDataset.fullGraph.hasNode(nodeId)
+      ) {
+        return;
+      }
+
+      dragEventsCountRef.current = 0;
+
+      void activateNode(nodeId, false);
+    };
+
+    const eventContainer =
+      sigma.getContainer();
+
+    eventContainer.addEventListener(
+      "comin-activate-node",
+      activateNodeFromLabel as EventListener,
+    );
+
     const upHandler = () => {
       const dragState = dragStateRef.current;
       if (dragState.type === "downing" || dragState.type === "dragging") {
@@ -1158,6 +1199,11 @@ export const EventsController: FC<EventsControllerProps> = ({
     const unbind = bindUpHandler(upHandler);
     return () => {
       unbind();
+
+      eventContainer.removeEventListener(
+        "comin-activate-node",
+        activateNodeFromLabel as EventListener,
+      );
     };
   }, [
     registerEvents,

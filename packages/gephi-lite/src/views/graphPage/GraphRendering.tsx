@@ -1,4 +1,4 @@
-import { SigmaContainer } from "@react-sigma/core";
+import { SigmaContainer, useSigma } from "@react-sigma/core";
 import { createNodeImageProgram } from "@sigma/node-image";
 import cx from "classnames";
 import { FC, useCallback, useEffect, useState } from "react";
@@ -139,17 +139,40 @@ const GraphCaptionLayer: FC = () => {
 };
 
 const CominHoverLabel: FC = () => {
+  const sigma = useSigma();
   const { nodeData } = useGraphDataset();
   const { hoveredNode } = useSigmaState();
 
-  if (!hoveredNode) return null;
+  /*
+   * Le cartouche reste brièvement affiché lorsque le pointeur
+   * quitte le nœud afin qu'il soit réellement atteignable.
+   */
+  const [displayedNode, setDisplayedNode] =
+    useState<string | null>(null);
+  const [labelHovered, setLabelHovered] =
+    useState(false);
 
-  const data = nodeData[hoveredNode];
+  useEffect(() => {
+    if (hoveredNode) {
+      setDisplayedNode(hoveredNode);
+      return;
+    }
 
-  // Les contextes gardent leur libellé spatial actuel.
-  if (!data || data.type === "context") {
-    return null;
-  }
+    if (labelHovered) return;
+
+    const timeout = window.setTimeout(
+      () => setDisplayedNode(null),
+      2000,
+    );
+
+    return () => window.clearTimeout(timeout);
+  }, [hoveredNode, labelHovered]);
+
+  if (!displayedNode) return null;
+
+  const data = nodeData[displayedNode];
+
+  if (!data) return null;
 
   const rawLabel = data.label;
 
@@ -163,7 +186,10 @@ const CominHoverLabel: FC = () => {
   let borderColor: string =
     COMIN_UI.nodes.post.borderColor;
 
-  if (
+  if (data.type === "context") {
+    borderColor =
+      COMIN_UI.nodes.context.color;
+  } else if (
     data.type === "context_semantic" ||
     data.type === "context_unit"
   ) {
@@ -183,9 +209,35 @@ const CominHoverLabel: FC = () => {
       COMIN_UI.nodes.structuralSource.borderColor;
   }
 
+  const activateNode = () => {
+    sigma.getContainer().dispatchEvent(
+      new CustomEvent("comin-activate-node", {
+        detail: {
+          nodeId: displayedNode,
+        },
+      }),
+    );
+  };
+
   return (
-    <div
+    <button
+      type="button"
       className="position-absolute"
+      onMouseEnter={() => setLabelHovered(true)}
+      onMouseLeave={() => setLabelHovered(false)}
+      onPointerDown={(event) =>
+        event.stopPropagation()
+      }
+      onMouseDown={(event) =>
+        event.stopPropagation()
+      }
+      onClick={(event) => {
+        event.stopPropagation();
+        activateNode();
+      }}
+      onDoubleClick={(event) =>
+        event.stopPropagation()
+      }
       style={{
         left: "50%",
         top: 12,
@@ -193,20 +245,23 @@ const CominHoverLabel: FC = () => {
         maxWidth: "70%",
         padding: "7px 12px",
         backgroundColor: COMIN_UI.background,
+        color: "inherit",
         border: `2px solid ${borderColor}`,
         borderRadius: 8,
         fontSize: 14,
+        fontFamily: "inherit",
         lineHeight: 1.3,
         fontWeight: 500,
         textAlign: "center",
-        pointerEvents: "none",
+        pointerEvents: "auto",
+        cursor: "pointer",
         zIndex: 30,
         boxShadow:
           "0 2px 8px rgba(0, 0, 0, 0.08)",
       }}
     >
       {label}
-    </div>
+    </button>
   );
 };
 

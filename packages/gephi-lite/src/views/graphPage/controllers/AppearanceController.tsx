@@ -651,13 +651,14 @@ export const AppearanceController: FC = () => {
 
         if (nodeType === "context") {
           if (contextIsExpanded) {
-            if (isExpandedContext) {
-              res.forceLabel = true;
-              res.hideLabel = false;
-              res.zIndex = 2;
-            } else {
-              res.hideLabel = true;
-            }
+            /*
+             * Les titres spatiaux des contextes ne sont
+             * visibles que lorsque tout est replié.
+             * En mode développé, le survol utilise le
+             * cartouche fixe.
+             */
+            res.forceLabel = false;
+            res.hideLabel = true;
           } else {
             const visibleContextLabels =
               getCollisionFreeContextLabels();
@@ -719,6 +720,21 @@ export const AppearanceController: FC = () => {
       if (
         isCominGraph &&
         nodeData[id]?.type !== "context"
+      ) {
+        res.hideLabel = true;
+        res.forceLabel = false;
+      }
+
+      /*
+       * Les règles d'emphase/hover ci-dessus peuvent forcer
+       * temporairement un label. On réaffirme donc ici la règle :
+       * dès qu'un contexte est développé, aucun titre de contexte
+       * ne reste écrit à côté d'un nœud.
+       */
+      if (
+        isCominGraph &&
+        nodeData[id]?.type === "context" &&
+        contextIsExpanded
       ) {
         res.hideLabel = true;
         res.forceLabel = false;
