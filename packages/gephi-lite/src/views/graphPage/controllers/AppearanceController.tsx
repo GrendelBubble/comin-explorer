@@ -321,10 +321,15 @@ export const AppearanceController: FC = () => {
     };
 
     const hasExpandedContexts = () =>
-      graph.someNode(
-        (_node, attributes) =>
-          attributes.cominExpanded === true,
-      );
+      graph.edges().some((edgeId) => {
+        const edgeType =
+          edgeData[edgeId]?.type;
+
+        return (
+          edgeType === "supported_by_post" ||
+          edgeType === "has_context_child"
+        );
+      });
 
     type CominContainerMask = {
       minX: number;
@@ -580,7 +585,15 @@ export const AppearanceController: FC = () => {
 
       const isExpandedContext =
         nodeData[id]?.type === "context" &&
-        attr.cominExpanded === true;
+        graph.edges(id).some((edgeId) => {
+          const edgeType =
+            edgeData[edgeId]?.type;
+
+          return (
+            edgeType === "supported_by_post" ||
+            edgeType === "has_context_child"
+          );
+        });
       res.zIndex = 0;
 
       if (isCominGraph) {
