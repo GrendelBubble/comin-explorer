@@ -221,7 +221,7 @@ const CominHoverLabel: FC<CominHoverLabelProps> = ({
   return (
     <button
       type="button"
-      className="position-absolute"
+      className="position-fixed"
       onMouseEnter={() => setLabelHovered(true)}
       onMouseLeave={() => setLabelHovered(false)}
       onPointerDown={(event) =>
@@ -254,7 +254,7 @@ const CominHoverLabel: FC<CominHoverLabelProps> = ({
         textAlign: "center",
         pointerEvents: "auto",
         cursor: "pointer",
-        zIndex: 30,
+        zIndex: 150,
         boxShadow:
           "0 2px 8px rgba(0, 0, 0, 0.08)",
       }}
@@ -369,9 +369,6 @@ export const GraphRendering: FC = () => {
         <AppearanceController />
         <SettingsController setIsReady={setReady} />
         <TouchMagnifierController />
-        <CominHoverLabel
-          onActivateNode={activateNodeFromLabel}
-        />
         <div className="sigma-layers">
           {quality.enabled && quality.showGrid && quality.metric?.deltaMax && (
             <GridController
@@ -385,6 +382,13 @@ export const GraphRendering: FC = () => {
         <InteractionsController />
         <GraphCaptionLayer />
       </SigmaContainer>
+
+      {isCominGraph && (
+        <CominHoverLabel
+          onActivateNode={activateNodeFromLabel}
+        />
+      )}
+
       <ContextSemanticReader
         item={contextSemanticItem}
         onClose={() => setContextSemanticItem(null)}

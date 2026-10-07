@@ -740,6 +740,30 @@ export const AppearanceController: FC = () => {
         res.forceLabel = false;
       }
 
+      /*
+       * Politique stricte des titres Com'In.
+       *
+       * - Tout replié : seuls les contextes gardent leur titre spatial.
+       * - Dès qu'un contexte est développé : Sigma ne reçoit plus
+       *   aucun texte à dessiner. Le titre existe uniquement dans
+       *   le cartouche DOM.
+       *
+       * Vider res.label empêche également les renderers internes
+       * de Sigma de faire réapparaître un titre au survol.
+       */
+      if (isCominGraph) {
+        const nodeType = nodeData[id]?.type;
+
+        if (
+          contextIsExpanded ||
+          nodeType !== "context"
+        ) {
+          res.label = "";
+          res.hideLabel = true;
+          res.forceLabel = false;
+        }
+      }
+
       // La zone de contenu du container "efface"
       // les éléments du graphe situés derrière elle.
       // Les nœuds appartenant au container restent visibles.
