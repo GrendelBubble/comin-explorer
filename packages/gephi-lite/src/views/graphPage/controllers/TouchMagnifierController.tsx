@@ -835,6 +835,8 @@ export const TouchMagnifierController: FC = () => {
       if (!state) return;
 
       if (state.active) {
+        const now = Date.now();
+
         /*
          * Neutralise le tap que Sigma générerait
          * éventuellement au relâchement.
@@ -842,8 +844,22 @@ export const TouchMagnifierController: FC = () => {
         container.dataset
           .cominSuppressTapUntil =
           String(
-            Date.now() + 500,
+            now + 500,
           );
+
+        /*
+         * Sur mobile, le navigateur peut générer
+         * un click synthétique juste après le touchend.
+         *
+         * Comme la loupe vient précisément d'apparaître
+         * sous le doigt, ce click peut sinon tomber sur
+         * elle et l'activer immédiatement.
+         *
+         * On marque donc cette levée comme une interaction
+         * tactile déjà consommée.
+         */
+        lastLensTouchRef.current =
+          now;
 
         /*
          * IMPORTANT :
