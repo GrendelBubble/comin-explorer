@@ -498,12 +498,15 @@ export const TouchMagnifierController: FC = () => {
         nodeId,
       );
 
-      requestAnimationFrame(() => {
-        drawLens(
-          position.left,
-          position.top,
-        );
-      });
+      /*
+       * Ne pas redessiner ici au frame suivant :
+       * la mise à jour du hover peut provoquer simultanément
+       * un refresh des canvases Sigma. On risquerait alors
+       * de recopier un canvas momentanément vide.
+       *
+       * Le dessin effectué juste avant reste la référence
+       * visuelle stable jusqu'au prochain déplacement.
+       */
     },
     [
       drawLens,
@@ -1272,46 +1275,89 @@ export const TouchMagnifierController: FC = () => {
       : 0;
 
   return createPortal(
-    <canvas
-      ref={lensRef}
-      aria-hidden="true"
+    <div
       style={{
-        position:
-          "fixed",
-        left:
-          lensClientLeft,
-        top:
-          lensClientTop,
-        width:
-          LENS_SIZE,
-        height:
-          LENS_SIZE,
-        transform:
-          "translate(-50%, -50%)",
-        borderRadius:
-          "50%",
-        opacity:
-          lensPosition
-            ? 1
-            : 0,
-        pointerEvents:
-          lensPosition
-            ? "auto"
-            : "none",
-        touchAction:
-          "none",
-        cursor:
-          lensPosition
-            ? "pointer"
-            : "default",
-        zIndex:
-          10000,
-        boxShadow:
-          "0 4px 14px rgba(0,0,0,0.22)",
-        WebkitTapHighlightColor:
-          "transparent",
+        position: "fixed",
+        left: lensClientLeft,
+        top: lensClientTop,
+        width: LENS_SIZE,
+        height: LENS_SIZE,
+        transform: "translate(-50%, -50%)",
+        pointerEvents: "none",
+        zIndex: 10000,
       }}
-    />,
+    >
+      <canvas
+        ref={lensRef}
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: LENS_SIZE,
+          height: LENS_SIZE,
+          borderRadius: "50%",
+          opacity:
+            lensPosition
+              ? 1
+              : 0,
+          pointerEvents:
+            lensPosition
+              ? "auto"
+              : "none",
+          touchAction: "none",
+          cursor:
+            lensPosition
+              ? "pointer"
+              : "default",
+          boxShadow:
+            "0 4px 14px rgba(0,0,0,0.22)",
+          WebkitTapHighlightColor:
+            "transparent",
+        }}
+      />
+
+      {lensPosition && (
+        <button
+          type="button"
+          aria-label="Fermer la loupe"
+          title="Fermer la loupe"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            clearTimer();
+            touchRef.current = null;
+            clearLens();
+          }}
+          style={{
+            position: "absolute",
+            top: -9,
+            right: -9,
+            width: 28,
+            height: 28,
+            padding: 0,
+            border: "2px solid #1F3442",
+            borderRadius: "50%",
+            backgroundColor: COMIN_UI.background,
+            color: "#1F3442",
+            fontSize: 20,
+            fontWeight: 700,
+            lineHeight: "22px",
+            textAlign: "center",
+            cursor: "pointer",
+            pointerEvents: "auto",
+            zIndex: 1,
+            boxShadow:
+              "0 2px 6px rgba(0,0,0,0.18)",
+          }}
+        >
+          ×
+        </button>
+      )}
+    </div>,
     document.body,
   );
 
