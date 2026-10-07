@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { TouchCoords } from "sigma/types";
 
 import {
   useSigmaActions,
@@ -13,17 +14,20 @@ import {
 import { COMIN_UI } from "../../../core/comin/uiPreset";
 
 const LONG_PRESS_MS = 220;
+
+// Tant que le doigt reste dans ce rayon,
+// on considère qu'il attend éventuellement la loupe.
+// Au-delà, le geste redevient immédiatement un pan normal.
 const START_MOVE_TOLERANCE = 8;
 
 const LENS_SIZE = 112;
 const LENS_ZOOM = 2.2;
 
-// Zone de détection volontairement beaucoup plus grande
-// que les petites pastilles affichées.
+// Zone tactile volontairement plus large
+// que la pastille réellement affichée.
 const TOUCH_HIT_RADIUS = 30;
 
 type TouchState = {
-  pointerId: number;
   startX: number;
   startY: number;
   lastX: number;
@@ -59,63 +63,65 @@ export const TouchMagnifierController: FC = () => {
 
   const clearTimer = useCallback(() => {
     if (timerRef.current !== null) {
-      window.clearTimeout(timerRef.current);
+      window.clearTimeout(
+        timerRef.current,
+      );
+
       timerRef.current = null;
     }
   }, []);
 
-  const setTouchHoveredNode = useCallback(
-    (nodeId: string | null) => {
-      if (
-        touchHoveredNodeRef.current ===
-        nodeId
-      ) {
-        return;
-      }
+  const setTouchHoveredNode =
+    useCallback(
+      (nodeId: string | null) => {
+        if (
+          touchHoveredNodeRef.current ===
+          nodeId
+        ) {
+          return;
+        }
 
-      touchHoveredNodeRef.current =
-        nodeId;
+        touchHoveredNodeRef.current =
+          nodeId;
 
-      if (nodeId) {
-        setHoveredNode(nodeId);
-      } else {
-        resetHoveredNode();
-      }
-    },
-    [
-      resetHoveredNode,
-      setHoveredNode,
-    ],
-  );
+        if (nodeId) {
+          setHoveredNode(nodeId);
+        } else {
+          resetHoveredNode();
+        }
+      },
+      [
+        resetHoveredNode,
+        setHoveredNode,
+      ],
+    );
 
+  /**
+   * Recherche le nœud le plus proche du doigt.
+   *
+   * x/y sont déjà exprimés dans le repère viewport
+   * du container Sigma.
+   */
   const pickNearestNode = useCallback(
     (
-      clientX: number,
-      clientY: number,
+      x: number,
+      y: number,
     ) => {
-      const container =
-        sigma.getContainer();
+      const graph =
+        sigma.getGraph();
 
-      const rect =
-        container.getBoundingClientRect();
+      let bestNode: string | null =
+        null;
 
-      const pointerX =
-        clientX - rect.left;
-
-      const pointerY =
-        clientY - rect.top;
-
-      const graph = sigma.getGraph();
-
-      let bestNode: string | null = null;
-      let bestDistance = Infinity;
+      let bestDistance =
+        Infinity;
 
       graph.forEachNode((nodeId) => {
         const displayData =
-          sigma.getNodeDisplayData(nodeId);
+          sigma.getNodeDisplayData(
+            nodeId,
+          );
 
-        // Ne pas sélectionner un nœud actuellement
-        // masqué par les reducers.
         if (
           !displayData ||
           displayData.hidden
@@ -124,39 +130,45 @@ export const TouchMagnifierController: FC = () => {
         }
 
         const attributes =
-          graph.getNodeAttributes(nodeId);
+          graph.getNodeAttributes(
+            nodeId,
+          );
 
-        const x = Number(attributes.x);
-        const y = Number(attributes.y);
+        const graphX =
+          Number(attributes.x);
+
+        const graphY =
+          Number(attributes.y);
 
         if (
-          !Number.isFinite(x) ||
-          !Number.isFinite(y)
+          !Number.isFinite(graphX) ||
+          !Number.isFinite(graphY)
         ) {
           return;
         }
 
         const viewport =
           sigma.graphToViewport({
-            x,
-            y,
+            x: graphX,
+            y: graphY,
           });
 
-        const dx =
-          viewport.x - pointerX;
-
-        const dy =
-          viewport.y - pointerY;
-
         const distance =
-          Math.hypot(dx, dy);
+          Math.hypot(
+            viewport.x - x,
+            viewport.y - y,
+          );
 
         if (
-          distance <= TOUCH_HIT_RADIUS &&
+          distance <=
+            TOUCH_HIT_RADIUS &&
           distance < bestDistance
         ) {
-          bestDistance = distance;
-          bestNode = nodeId;
+          bestDistance =
+            distance;
+
+          bestNode =
+            nodeId;
         }
       });
 
@@ -165,80 +177,82 @@ export const TouchMagnifierController: FC = () => {
     [sigma],
   );
 
-  const positionLens = useCallback(
-    (
-      clientX: number,
-      clientY: number,
-    ) => {
-      const rect =
-        sigma
-          .getContainer()
-          .getBoundingClientRect();
+  const positionLens =
+    useCallback(
+      (
+        x: number,
+        y: number,
+      ) => {
+        const rect =
+          sigma
+            .getContainer()
+            .getBoundingClientRect();
 
-      const half =
-        LENS_SIZE / 2;
+        const half =
+          LENS_SIZE / 2;
 
-      const margin = 8;
+        const margin = 8;
 
-      const localX =
-        clientX - rect.left;
+        const clamp = (
+          value: number,
+          min: number,
+          max: number,
+        ) =>
+          Math.max(
+            min,
+            Math.min(
+              max,
+              value,
+            ),
+          );
 
-      const localY =
-        clientY - rect.top;
-
-      const clamp = (
-        value: number,
-        min: number,
-        max: number,
-      ) =>
-        Math.max(
-          min,
-          Math.min(max, value),
+        const left = clamp(
+          x,
+          half + margin,
+          rect.width -
+            half -
+            margin,
         );
 
-      const left = clamp(
-        localX,
-        half + margin,
-        rect.width - half - margin,
-      );
-
-      // La loupe est normalement placée au-dessus
-      // du doigt pour que celui-ci ne la masque pas.
-      let top =
-        localY -
-        half -
-        46;
-
-      // Si nous sommes trop près du haut,
-      // l'afficher sous le doigt.
-      if (
-        top - half <
-        margin
-      ) {
-        top =
-          localY +
-          half +
+        // Afficher normalement la loupe
+        // au-dessus du doigt.
+        let top =
+          y -
+          half -
           46;
-      }
 
-      top = clamp(
-        top,
-        half + margin,
-        rect.height - half - margin,
-      );
+        // Si nous sommes trop près du haut,
+        // la placer sous le doigt.
+        if (
+          top - half <
+          margin
+        ) {
+          top =
+            y +
+            half +
+            46;
+        }
 
-      setLensPosition({
-        left,
-        top,
-      });
-    },
-    [sigma],
-  );
+        top = clamp(
+          top,
+          half + margin,
+          rect.height -
+            half -
+            margin,
+        );
+
+        setLensPosition({
+          left,
+          top,
+        });
+      },
+      [sigma],
+    );
 
   const drawLens = useCallback(
     (
-      clientX: number,
-      clientY: number,
+      x: number,
+      y: number,
     ) => {
       const lens =
         lensRef.current;
@@ -254,11 +268,16 @@ export const TouchMagnifierController: FC = () => {
         );
 
       if (
-        lens.width !== pixelSize ||
-        lens.height !== pixelSize
+        lens.width !==
+          pixelSize ||
+        lens.height !==
+          pixelSize
       ) {
-        lens.width = pixelSize;
-        lens.height = pixelSize;
+        lens.width =
+          pixelSize;
+
+        lens.height =
+          pixelSize;
       }
 
       const context =
@@ -294,6 +313,7 @@ export const TouchMagnifierController: FC = () => {
       context.save();
 
       context.beginPath();
+
       context.arc(
         LENS_SIZE / 2,
         LENS_SIZE / 2,
@@ -301,6 +321,7 @@ export const TouchMagnifierController: FC = () => {
         0,
         Math.PI * 2,
       );
+
       context.clip();
 
       context.fillStyle =
@@ -314,80 +335,97 @@ export const TouchMagnifierController: FC = () => {
       );
 
       const sourceSize =
-        LENS_SIZE / LENS_ZOOM;
+        LENS_SIZE /
+        LENS_ZOOM;
 
-      const canvases = Array.from(
-        sigma
-          .getContainer()
-          .querySelectorAll<HTMLCanvasElement>(
+      const container =
+        sigma.getContainer();
+
+      const containerRect =
+        container.getBoundingClientRect();
+
+      const canvases =
+        Array.from(
+          container.querySelectorAll<HTMLCanvasElement>(
             "canvas",
           ),
-      ).filter(
-        (canvas) =>
-          canvas !== lens &&
-          canvas.width > 0 &&
-          canvas.height > 0,
-      );
-
-      canvases.forEach((canvas) => {
-        const rect =
-          canvas.getBoundingClientRect();
-
-        if (
-          !rect.width ||
-          !rect.height
-        ) {
-          return;
-        }
-
-        const scaleX =
-          canvas.width /
-          rect.width;
-
-        const scaleY =
-          canvas.height /
-          rect.height;
-
-        const localX =
-          clientX - rect.left;
-
-        const localY =
-          clientY - rect.top;
-
-        const sx =
-          (
-            localX -
-            sourceSize / 2
-          ) * scaleX;
-
-        const sy =
-          (
-            localY -
-            sourceSize / 2
-          ) * scaleY;
-
-        const sw =
-          sourceSize * scaleX;
-
-        const sh =
-          sourceSize * scaleY;
-
-        context.drawImage(
-          canvas,
-          sx,
-          sy,
-          sw,
-          sh,
-          0,
-          0,
-          LENS_SIZE,
-          LENS_SIZE,
+        ).filter(
+          (canvas) =>
+            canvas !== lens &&
+            canvas.width > 0 &&
+            canvas.height > 0,
         );
-      });
+
+      canvases.forEach(
+        (canvas) => {
+          const rect =
+            canvas.getBoundingClientRect();
+
+          if (
+            !rect.width ||
+            !rect.height
+          ) {
+            return;
+          }
+
+          const scaleX =
+            canvas.width /
+            rect.width;
+
+          const scaleY =
+            canvas.height /
+            rect.height;
+
+          // x/y sont relatifs au container Sigma.
+          // Les convertir dans le repère du canvas.
+          const canvasX =
+            x +
+            containerRect.left -
+            rect.left;
+
+          const canvasY =
+            y +
+            containerRect.top -
+            rect.top;
+
+          const sx =
+            (
+              canvasX -
+              sourceSize / 2
+            ) *
+            scaleX;
+
+          const sy =
+            (
+              canvasY -
+              sourceSize / 2
+            ) *
+            scaleY;
+
+          const sw =
+            sourceSize *
+            scaleX;
+
+          const sh =
+            sourceSize *
+            scaleY;
+
+          context.drawImage(
+            canvas,
+            sx,
+            sy,
+            sw,
+            sh,
+            0,
+            0,
+            LENS_SIZE,
+            LENS_SIZE,
+          );
+        },
+      );
 
       context.restore();
 
-      // Cerclage de la lentille.
       context.beginPath();
 
       context.arc(
@@ -410,35 +448,28 @@ export const TouchMagnifierController: FC = () => {
 
   const exploreAt = useCallback(
     (
-      clientX: number,
-      clientY: number,
+      x: number,
+      y: number,
     ) => {
-      positionLens(
-        clientX,
-        clientY,
-      );
+      positionLens(x, y);
 
-      drawLens(
-        clientX,
-        clientY,
-      );
+      drawLens(x, y);
 
       const nodeId =
         pickNearestNode(
-          clientX,
-          clientY,
+          x,
+          y,
         );
 
-      setTouchHoveredNode(nodeId);
+      setTouchHoveredNode(
+        nodeId,
+      );
 
-      // Le changement de hover peut modifier
-      // visuellement le nœud. Actualiser ensuite
-      // la loupe sur la frame suivante.
+      // Le hover modifie éventuellement
+      // le rendu du nœud. Redessiner la loupe
+      // juste après ce rafraîchissement.
       requestAnimationFrame(() => {
-        drawLens(
-          clientX,
-          clientY,
-        );
+        drawLens(x, y);
       });
     },
     [
@@ -449,75 +480,89 @@ export const TouchMagnifierController: FC = () => {
     ],
   );
 
-  useEffect(() => {
-    const container =
-      sigma.getContainer();
+  const stopExploration =
+    useCallback(
+      (
+        suppressTap: boolean,
+      ) => {
+        clearTimer();
 
+        const state =
+          touchRef.current;
+
+        if (
+          state?.active &&
+          suppressTap
+        ) {
+          sigma.getContainer().dataset
+            .cominSuppressTapUntil =
+            String(
+              Date.now() + 500,
+            );
+        }
+
+        touchRef.current =
+          null;
+
+        setLensPosition(null);
+
+        setTouchHoveredNode(null);
+      },
+      [
+        clearTimer,
+        setTouchHoveredNode,
+        sigma,
+      ],
+    );
+
+  useEffect(() => {
     const coarsePointer =
       window.matchMedia(
         "(hover: none), (pointer: coarse)",
       );
 
-    const stopExploration = (
-      suppressTap: boolean,
+    if (!coarsePointer.matches) {
+      return;
+    }
+
+    /*
+     * IMPORTANT :
+     *
+     * Nous utilisons directement le TouchCaptor Sigma.
+     *
+     * Son événement touchmove est émis AVANT que Sigma
+     * ne déplace sa caméra.
+     *
+     * appeler event.preventSigmaDefault() ici empêche donc
+     * réellement le pan du graphe.
+     */
+    const touchCaptor =
+      sigma.getTouchCaptor();
+
+    const onTouchDown = (
+      event: TouchCoords,
     ) => {
-      clearTimer();
-
-      const state =
-        touchRef.current;
-
-      if (state?.active) {
-        sigma
-          .getCamera()
-          .enable();
-
-        if (suppressTap) {
-          // Empêche le relâchement d'un appui long
-          // d'être interprété ensuite comme un tap
-          // sur le post, la source ou le container.
-          container.dataset.cominSuppressTapUntil =
-            String(
-              Date.now() + 500,
-            );
-        }
-      }
-
-      touchRef.current = null;
-
-      setLensPosition(null);
-      setTouchHoveredNode(null);
-    };
-
-    const onPointerDown = (
-      event: PointerEvent,
-    ) => {
+      // Le pinch à deux doigts reste entièrement
+      // géré par Sigma.
       if (
-        !coarsePointer.matches ||
-        event.pointerType === "mouse"
+        event.touches.length !== 1
       ) {
-        return;
-      }
-
-      // Un deuxième doigt annule le mode loupe
-      // pour laisser les gestes multi-touch normaux.
-      if (!event.isPrimary) {
         stopExploration(false);
         return;
       }
 
+      const point =
+        event.touches[0];
+
+      if (!point) return;
+
       clearTimer();
 
       touchRef.current = {
-        pointerId:
-          event.pointerId,
-        startX:
-          event.clientX,
-        startY:
-          event.clientY,
-        lastX:
-          event.clientX,
-        lastY:
-          event.clientY,
+        startX: point.x,
+        startY: point.y,
+        lastX: point.x,
+        lastY: point.y,
         active: false,
       };
 
@@ -530,12 +575,10 @@ export const TouchMagnifierController: FC = () => {
 
           state.active = true;
 
-          // Le graphe ne doit plus bouger tant
-          // que le doigt utilise la loupe.
-          sigma
-            .getCamera()
-            .disable();
-
+          /*
+           * À partir de maintenant, tout touchmove
+           * sera détourné en "survol tactile".
+           */
           exploreAt(
             state.lastX,
             state.lastY,
@@ -543,182 +586,137 @@ export const TouchMagnifierController: FC = () => {
         }, LONG_PRESS_MS);
     };
 
-    const onPointerMove = (
-      event: PointerEvent,
+    const onTouchMove = (
+      event: TouchCoords,
     ) => {
       const state =
         touchRef.current;
 
+      if (!state) return;
+
       if (
-        !state ||
-        state.pointerId !==
-          event.pointerId
+        event.touches.length !== 1
       ) {
+        stopExploration(false);
         return;
       }
 
+      const point =
+        event.touches[0];
+
+      if (!point) return;
+
       state.lastX =
-        event.clientX;
+        point.x;
 
       state.lastY =
-        event.clientY;
+        point.y;
 
       if (!state.active) {
         const distance =
           Math.hypot(
-            event.clientX -
+            point.x -
               state.startX,
-            event.clientY -
+            point.y -
               state.startY,
           );
 
-        // Le geste a commencé comme un balayage :
-        // conserver le pan Sigma standard.
         if (
           distance >
           START_MOVE_TOLERANCE
         ) {
+          /*
+           * Geste suffisamment franc :
+           * ce n'est pas une exploration.
+           *
+           * On annule le timer et on laisse
+           * Sigma poursuivre son pan normal.
+           */
           clearTimer();
-          touchRef.current = null;
+
+          touchRef.current =
+            null;
+
+          return;
         }
 
+        /*
+         * Petits mouvements pendant les 220 ms :
+         * on bloque le graphe afin qu'il ne dérive
+         * pas avant l'activation de la loupe.
+         */
+        event.preventSigmaDefault();
+
         return;
       }
 
-      // Une fois la loupe activée,
-      // le mouvement appartient à l'exploration.
-      event.preventDefault();
-      event.stopPropagation();
+      /*
+       * MODE LOUPE ACTIF
+       *
+       * Cette ligne est le point essentiel :
+       * le TouchCaptor de Sigma ne déplacera
+       * PAS la caméra pour ce mouvement.
+       */
+      event.preventSigmaDefault();
 
       exploreAt(
-        event.clientX,
-        event.clientY,
+        point.x,
+        point.y,
       );
     };
 
-    const onPointerUp = (
-      event: PointerEvent,
+    const onTouchUp = (
+      _event: TouchCoords,
     ) => {
-      const state =
-        touchRef.current;
-
-      if (
-        !state ||
-        state.pointerId !==
-          event.pointerId
-      ) {
-        return;
-      }
+      const wasActive =
+        touchRef.current
+          ?.active === true;
 
       stopExploration(
-        state.active,
+        wasActive,
       );
     };
 
-    const onPointerCancel = (
-      event: PointerEvent,
-    ) => {
-      const state =
-        touchRef.current;
-
-      if (
-        !state ||
-        state.pointerId !==
-          event.pointerId
-      ) {
-        return;
-      }
-
-      stopExploration(
-        state.active,
-      );
-    };
-
-    const onContextMenu = (
-      event: MouseEvent,
-    ) => {
-      if (
-        touchRef.current?.active
-      ) {
-        event.preventDefault();
-      }
-    };
-
-    container.addEventListener(
-      "pointerdown",
-      onPointerDown,
-      true,
+    touchCaptor.on(
+      "touchdown",
+      onTouchDown,
     );
 
-    container.addEventListener(
-      "pointermove",
-      onPointerMove,
-      {
-        capture: true,
-        passive: false,
-      },
+    touchCaptor.on(
+      "touchmove",
+      onTouchMove,
     );
 
-    container.addEventListener(
-      "pointerup",
-      onPointerUp,
-      true,
-    );
-
-    container.addEventListener(
-      "pointercancel",
-      onPointerCancel,
-      true,
-    );
-
-    container.addEventListener(
-      "contextmenu",
-      onContextMenu,
-      true,
+    touchCaptor.on(
+      "touchup",
+      onTouchUp,
     );
 
     return () => {
       clearTimer();
 
-      sigma
-        .getCamera()
-        .enable();
-
-      container.removeEventListener(
-        "pointerdown",
-        onPointerDown,
-        true,
+      touchCaptor.off(
+        "touchdown",
+        onTouchDown,
       );
 
-      container.removeEventListener(
-        "pointermove",
-        onPointerMove,
-        true,
+      touchCaptor.off(
+        "touchmove",
+        onTouchMove,
       );
 
-      container.removeEventListener(
-        "pointerup",
-        onPointerUp,
-        true,
+      touchCaptor.off(
+        "touchup",
+        onTouchUp,
       );
 
-      container.removeEventListener(
-        "pointercancel",
-        onPointerCancel,
-        true,
-      );
-
-      container.removeEventListener(
-        "contextmenu",
-        onContextMenu,
-        true,
-      );
+      stopExploration(false);
     };
   }, [
     clearTimer,
     exploreAt,
-    setTouchHoveredNode,
     sigma,
+    stopExploration,
   ]);
 
   return (
@@ -728,17 +726,25 @@ export const TouchMagnifierController: FC = () => {
       className="position-absolute"
       style={{
         left:
-          lensPosition?.left ?? 0,
+          lensPosition?.left ??
+          0,
         top:
-          lensPosition?.top ?? 0,
-        width: LENS_SIZE,
-        height: LENS_SIZE,
+          lensPosition?.top ??
+          0,
+        width:
+          LENS_SIZE,
+        height:
+          LENS_SIZE,
         transform:
           "translate(-50%, -50%)",
-        borderRadius: "50%",
+        borderRadius:
+          "50%",
         opacity:
-          lensPosition ? 1 : 0,
-        pointerEvents: "none",
+          lensPosition
+            ? 1
+            : 0,
+        pointerEvents:
+          "none",
         zIndex: 25,
         boxShadow:
           "0 4px 14px rgba(0,0,0,0.22)",
