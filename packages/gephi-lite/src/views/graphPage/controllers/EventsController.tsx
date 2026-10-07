@@ -621,6 +621,15 @@ export const EventsController: FC<EventsControllerProps> = ({
       }
     };
 
+    const suppressTouchTap = () => {
+      const until = Number(
+        sigma.getContainer().dataset
+          .cominSuppressTapUntil ?? 0,
+      );
+
+      return until > Date.now();
+    };
+
     registerEvents({
       enterEdge({ edge }) {
         if (dragStateRef.current.type !== "idle") return;
@@ -639,6 +648,7 @@ export const EventsController: FC<EventsControllerProps> = ({
         resetHoveredNode();
       },
       async clickNode({ node, event }) {
+        if (suppressTouchTap()) return;
         if (dragEventsCountRef.current >= DRAG_EVENTS_TOLERANCE) return;
 
         const nodeData = graphDataset.nodeData[node];
@@ -1018,6 +1028,8 @@ export const EventsController: FC<EventsControllerProps> = ({
       },
 
       clickEdge({ edge, event }) {
+        if (suppressTouchTap()) return;
+
         if (event.original.ctrlKey) {
           toggle({
             type: "edges",
@@ -1053,6 +1065,8 @@ export const EventsController: FC<EventsControllerProps> = ({
         };
       },
       clickStage(e) {
+        if (suppressTouchTap()) return;
+
         // Ctrl reste réservé à la sélection multiple.
         if (e.event.original.ctrlKey) return;
 

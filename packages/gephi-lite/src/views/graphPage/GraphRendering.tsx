@@ -38,6 +38,7 @@ import { EventsController } from "./controllers/EventsController";
 import { GridController } from "./controllers/GridController";
 import { SelectionController } from "./controllers/SelectionController";
 import { SettingsController } from "./controllers/SettingsController";
+import { TouchMagnifierController } from "./controllers/TouchMagnifierController";
 import { ContextSemanticReader } from "./ContextSemanticReader";
 import {
   PostNoteReader,
@@ -291,6 +292,7 @@ export const GraphRendering: FC = () => {
         />
         <AppearanceController />
         <SettingsController setIsReady={setReady} />
+        <TouchMagnifierController />
         <CominHoverLabel />
         <div className="sigma-layers">
           {quality.enabled && quality.showGrid && quality.metric?.deltaMax && (
