@@ -49,12 +49,18 @@ interface EventsControllerProps {
     item: CominContextChildPostNode,
   ) => void;
   onCloseTransientPanels: () => void;
+  onNodeActivatorReady: (
+    activator:
+      | ((nodeId: string) => void)
+      | null,
+  ) => void;
 }
 
 export const EventsController: FC<EventsControllerProps> = ({
   onOpenContextSemantic,
   onOpenPostNote,
   onCloseTransientPanels,
+  onNodeActivatorReady,
 }) => {
   const sigma: GephiLiteSigma = useSigma();
   const registerEvents = useRegisterEvents();
@@ -1146,34 +1152,27 @@ export const EventsController: FC<EventsControllerProps> = ({
     });
 
     const activateNodeFromLabel = (
-      event: Event,
+      nodeId: string,
     ) => {
-      const customEvent =
-        event as CustomEvent<{
-          nodeId?: string;
-        }>;
-
-      const nodeId =
-        customEvent.detail?.nodeId;
-
       if (
-        typeof nodeId !== "string" ||
-        !graphDataset.fullGraph.hasNode(nodeId)
+        !graphDataset.fullGraph.hasNode(
+          nodeId,
+        )
       ) {
         return;
       }
 
+      /*
+       * Même fonction que clickNode.
+       * L'appel reste directement dans la chaîne du clic DOM,
+       * ce qui permet aussi window.open() pour une source.
+       */
       dragEventsCountRef.current = 0;
-
       void activateNode(nodeId, false);
     };
 
-    const eventContainer =
-      sigma.getContainer();
-
-    eventContainer.addEventListener(
-      "comin-activate-node",
-      activateNodeFromLabel as EventListener,
+    onNodeActivatorReady(
+      activateNodeFromLabel,
     );
 
     const upHandler = () => {
@@ -1199,11 +1198,7 @@ export const EventsController: FC<EventsControllerProps> = ({
     const unbind = bindUpHandler(upHandler);
     return () => {
       unbind();
-
-      eventContainer.removeEventListener(
-        "comin-activate-node",
-        activateNodeFromLabel as EventListener,
-      );
+      onNodeActivatorReady(null);
     };
   }, [
     registerEvents,
@@ -1225,6 +1220,7 @@ export const EventsController: FC<EventsControllerProps> = ({
     onOpenContextSemantic,
     onOpenPostNote,
     onCloseTransientPanels,
+    onNodeActivatorReady,
   ]);
 
   // DOM events not handled by sigma:

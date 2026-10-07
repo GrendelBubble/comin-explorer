@@ -325,10 +325,18 @@ export const SettingsController: FC<{ setIsReady: () => void }> = ({ setIsReady 
     );
     sigma.setSetting(
       "defaultDrawNodeHover",
-      getDrawNodeLabel(
-        graphAppearance,
-        isCominGraph ? drawWrappedDiscNodeLabel : drawDiscNodeHover,
-      ),
+      isCominGraph
+        ? () => {
+            /*
+             * Dans Com'In, aucun titre n'est rendu par Sigma
+             * au survol : le cartouche fixe est l'unique
+             * représentation du titre survolé.
+             */
+          }
+        : getDrawNodeLabel(
+            graphAppearance,
+            drawDiscNodeHover,
+          ),
     );
     sigma.setSetting("defaultDrawEdgeLabel", getDrawEdgeLabel(graphAppearance, drawStraightEdgeLabel));
 

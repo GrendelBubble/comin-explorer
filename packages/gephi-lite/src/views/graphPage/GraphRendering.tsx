@@ -1,7 +1,7 @@
-import { SigmaContainer, useSigma } from "@react-sigma/core";
+import { SigmaContainer } from "@react-sigma/core";
 import { createNodeImageProgram } from "@sigma/node-image";
 import cx from "classnames";
-import { FC, useCallback, useEffect, useState } from "react";
+import { FC, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Settings } from "sigma/settings";
 
@@ -138,8 +138,13 @@ const GraphCaptionLayer: FC = () => {
   );
 };
 
-const CominHoverLabel: FC = () => {
-  const sigma = useSigma();
+interface CominHoverLabelProps {
+  onActivateNode: (nodeId: string) => void;
+}
+
+const CominHoverLabel: FC<CominHoverLabelProps> = ({
+  onActivateNode,
+}) => {
   const { nodeData } = useGraphDataset();
   const { hoveredNode } = useSigmaState();
 
@@ -210,13 +215,7 @@ const CominHoverLabel: FC = () => {
   }
 
   const activateNode = () => {
-    sigma.getContainer().dispatchEvent(
-      new CustomEvent("comin-activate-node", {
-        detail: {
-          nodeId: displayedNode,
-        },
-      }),
-    );
+    onActivateNode(displayedNode);
   };
 
   return (
@@ -293,6 +292,27 @@ export const GraphRendering: FC = () => {
     useState<CominContextSemanticNode | null>(null);
   const [postNoteItem, setPostNoteItem] =
     useState<PostNoteReaderItem | null>(null);
+  const nodeActivatorRef = useRef<
+    ((nodeId: string) => void) | null
+  >(null);
+
+  const registerNodeActivator = useCallback(
+    (
+      activator:
+        | ((nodeId: string) => void)
+        | null,
+    ) => {
+      nodeActivatorRef.current = activator;
+    },
+    [],
+  );
+
+  const activateNodeFromLabel = useCallback(
+    (nodeId: string) => {
+      nodeActivatorRef.current?.(nodeId);
+    },
+    [],
+  );
   const { backgroundColor, layoutGridColor } = useAppearance();
   const { nodeData } = useGraphDataset();
   const sigmaGraph = useSigmaGraph();
@@ -344,11 +364,14 @@ export const GraphRendering: FC = () => {
             })
           }
           onCloseTransientPanels={closeTransientPanels}
+          onNodeActivatorReady={registerNodeActivator}
         />
         <AppearanceController />
         <SettingsController setIsReady={setReady} />
         <TouchMagnifierController />
-        <CominHoverLabel />
+        <CominHoverLabel
+          onActivateNode={activateNodeFromLabel}
+        />
         <div className="sigma-layers">
           {quality.enabled && quality.showGrid && quality.metric?.deltaMax && (
             <GridController
