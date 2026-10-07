@@ -292,6 +292,8 @@ export const GraphRendering: FC = () => {
     useState<CominContextSemanticNode | null>(null);
   const [postNoteItem, setPostNoteItem] =
     useState<PostNoteReaderItem | null>(null);
+  const [expandedThemeId, setExpandedThemeId] =
+    useState<string | null>(null);
   const nodeActivatorRef = useRef<
     ((nodeId: string) => void) | null
   >(null);
@@ -365,8 +367,11 @@ export const GraphRendering: FC = () => {
           }
           onCloseTransientPanels={closeTransientPanels}
           onNodeActivatorReady={registerNodeActivator}
+          onExpandedThemeChange={setExpandedThemeId}
         />
-        <AppearanceController />
+        <AppearanceController
+          expandedThemeId={expandedThemeId}
+        />
         <SettingsController setIsReady={setReady} />
         <TouchMagnifierController />
         <div className="sigma-layers">

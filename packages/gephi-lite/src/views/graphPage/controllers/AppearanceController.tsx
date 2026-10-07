@@ -25,7 +25,15 @@ import {
   memoizedDarken,
 } from "../../../utils/colors";
 
-export const AppearanceController: FC = () => {
+interface AppearanceControllerProps {
+  expandedThemeId: string | null;
+}
+
+export const AppearanceController: FC<
+  AppearanceControllerProps
+> = ({
+  expandedThemeId,
+}) => {
   const sigma: GephiLiteSigma = useSigma();
   const selection = useSelection();
   const { showEdges } = useAppearance();
@@ -321,15 +329,7 @@ export const AppearanceController: FC = () => {
     };
 
     const hasExpandedContexts = () =>
-      graph.edges().some((edgeId) => {
-        const edgeType =
-          edgeData[edgeId]?.type;
-
-        return (
-          edgeType === "supported_by_post" ||
-          edgeType === "has_context_child"
-        );
-      });
+      expandedThemeId !== null;
 
     type CominContainerMask = {
       minX: number;
@@ -585,15 +585,8 @@ export const AppearanceController: FC = () => {
 
       const isExpandedContext =
         nodeData[id]?.type === "context" &&
-        graph.edges(id).some((edgeId) => {
-          const edgeType =
-            edgeData[edgeId]?.type;
-
-          return (
-            edgeType === "supported_by_post" ||
-            edgeType === "has_context_child"
-          );
-        });
+        nodeData[id]?.theme_id ===
+          expandedThemeId;
       res.zIndex = 0;
 
       if (isCominGraph) {
@@ -821,14 +814,18 @@ export const AppearanceController: FC = () => {
                 const target = graph.target(id);
 
                 const touchesExpandedContext =
-                  graph.getNodeAttribute(
-                    source,
-                    "cominExpanded",
-                  ) === true ||
-                  graph.getNodeAttribute(
-                    target,
-                    "cominExpanded",
-                  ) === true;
+                  (
+                    nodeData[source]?.type ===
+                      "context" &&
+                    nodeData[source]?.theme_id ===
+                      expandedThemeId
+                  ) ||
+                  (
+                    nodeData[target]?.type ===
+                      "context" &&
+                    nodeData[target]?.theme_id ===
+                      expandedThemeId
+                  );
 
                 res.color =
                   contextIsExpanded &&
@@ -955,6 +952,7 @@ export const AppearanceController: FC = () => {
     fullGraph.type,
     nodeData,
     edgeData,
+    expandedThemeId,
   ]);
 
   return null;

@@ -54,6 +54,9 @@ interface EventsControllerProps {
       | ((nodeId: string) => void)
       | null,
   ) => void;
+  onExpandedThemeChange: (
+    themeId: string | null,
+  ) => void;
 }
 
 export const EventsController: FC<EventsControllerProps> = ({
@@ -61,6 +64,7 @@ export const EventsController: FC<EventsControllerProps> = ({
   onOpenPostNote,
   onCloseTransientPanels,
   onNodeActivatorReady,
+  onExpandedThemeChange,
 }) => {
   const sigma: GephiLiteSigma = useSigma();
   const registerEvents = useRegisterEvents();
@@ -613,6 +617,7 @@ export const EventsController: FC<EventsControllerProps> = ({
       }
 
       expandedThemesRef.current.delete(themeId);
+      onExpandedThemeChange(null);
 
       if (
         sigma
@@ -780,6 +785,8 @@ export const EventsController: FC<EventsControllerProps> = ({
         });
 
         expandedThemesRef.current.add(themeId);
+        onExpandedThemeChange(themeId);
+
         sigma.getGraph().setNodeAttribute(
           node,
           "cominExpanded",
@@ -1010,6 +1017,8 @@ export const EventsController: FC<EventsControllerProps> = ({
           );
         } catch (error) {
           expandedThemesRef.current.delete(themeId);
+          onExpandedThemeChange(null);
+
           sigma.getGraph().setNodeAttribute(
             node,
             "cominExpanded",
@@ -1221,6 +1230,7 @@ export const EventsController: FC<EventsControllerProps> = ({
     onOpenPostNote,
     onCloseTransientPanels,
     onNodeActivatorReady,
+    onExpandedThemeChange,
   ]);
 
   // DOM events not handled by sigma:
