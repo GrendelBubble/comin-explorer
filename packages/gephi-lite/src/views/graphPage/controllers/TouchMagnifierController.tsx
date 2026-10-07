@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { TouchCoords } from "sigma/types";
+import { createPortal } from "react-dom";
 
 import {
   useGraphDataset,
@@ -652,7 +653,41 @@ export const TouchMagnifierController: FC = () => {
          * - contexte -> développer
          * - contexte sémantique -> lecteur
          */
-        container.dispatchEvent(
+        const targetClientX =
+          containerRect.left +
+          viewport.x;
+
+        const targetClientY =
+          containerRect.top +
+          viewport.y;
+
+        /*
+         * La loupe est maintenant au-dessus du graphe.
+         * Pour retrouver la vraie couche Sigma située
+         * dessous, on la retire momentanément du
+         * hit-testing.
+         */
+        const previousPointerEvents =
+          lens.style.pointerEvents;
+
+        lens.style.pointerEvents =
+          "none";
+
+        const target =
+          document.elementFromPoint(
+            targetClientX,
+            targetClientY,
+          );
+
+        lens.style.pointerEvents =
+          previousPointerEvents;
+
+        const clickTarget =
+          target instanceof HTMLElement
+            ? target
+            : container;
+
+        clickTarget.dispatchEvent(
           new MouseEvent(
             "click",
             {
@@ -661,11 +696,9 @@ export const TouchMagnifierController: FC = () => {
               view: window,
               button: 0,
               clientX:
-                containerRect.left +
-                viewport.x,
+                targetClientX,
               clientY:
-                containerRect.top +
-                viewport.y,
+                targetClientY,
             },
           ),
         );
@@ -921,8 +954,11 @@ export const TouchMagnifierController: FC = () => {
   ]);
 
   /*
-   * Une fois persistante, la loupe devient
-   * une véritable surface tactile / souris.
+   * Une fois persistante, la loupe constitue
+   * sa propre surface d'interaction.
+   *
+   * PointerEvent fonctionne de façon identique
+   * avec souris, tactile Windows et tactile mobile.
    */
   useEffect(() => {
     const lens =
@@ -930,18 +966,19 @@ export const TouchMagnifierController: FC = () => {
 
     if (!lens) return;
 
-    let touchStart:
+    let pointerStart:
       | {
+          pointerId: number;
           x: number;
           y: number;
         }
       | null = null;
 
-    const onTouchStart = (
-      event: TouchEvent,
+    const onPointerDown = (
+      event: PointerEvent,
     ) => {
       if (
-        event.touches.length !== 1
+        !lensPositionRef.current
       ) {
         return;
       }
@@ -949,67 +986,103 @@ export const TouchMagnifierController: FC = () => {
       event.preventDefault();
       event.stopPropagation();
 
-      const touch =
-        event.touches[0];
-
-      touchStart = {
-        x: touch.clientX,
-        y: touch.clientY,
+      pointerStart = {
+        pointerId:
+          event.pointerId,
+        x:
+          event.clientX,
+        y:
+          event.clientY,
       };
+
+      try {
+        lens.setPointerCapture(
+          event.pointerId,
+        );
+      } catch {
+        // Certains navigateurs peuvent refuser
+        // la capture. Le tap reste utilisable.
+      }
     };
 
-    const onTouchMove = (
-      event: TouchEvent,
+    const onPointerMove = (
+      event: PointerEvent,
     ) => {
-      event.preventDefault();
-      event.stopPropagation();
-    };
-
-    const onTouchEnd = (
-      event: TouchEvent,
-    ) => {
-      event.preventDefault();
-      event.stopPropagation();
-
-      const touch =
-        event.changedTouches[0];
-
       if (
-        !touch ||
-        !touchStart
+        pointerStart?.pointerId !==
+        event.pointerId
       ) {
-        touchStart = null;
         return;
       }
+
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    const onPointerUp = (
+      event: PointerEvent,
+    ) => {
+      if (
+        !pointerStart ||
+        pointerStart.pointerId !==
+          event.pointerId
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
 
       const distance =
         Math.hypot(
-          touch.clientX -
-            touchStart.x,
-          touch.clientY -
-            touchStart.y,
+          event.clientX -
+            pointerStart.x,
+          event.clientY -
+            pointerStart.y,
         );
 
-      touchStart = null;
+      pointerStart = null;
 
-      if (distance > 12) {
+      try {
+        lens.releasePointerCapture(
+          event.pointerId,
+        );
+      } catch {
+        // Capture éventuellement déjà libérée.
+      }
+
+      if (distance > 20) {
         return;
       }
 
-      lastLensTouchRef.current =
-        Date.now();
+      /*
+       * Un PointerEvent tactile peut être suivi
+       * d'un click synthétique. Le mémoriser
+       * évite une double activation.
+       */
+      if (
+        event.pointerType !==
+        "mouse"
+      ) {
+        lastLensTouchRef.current =
+          Date.now();
+      }
 
       activateLensPoint(
-        touch.clientX,
-        touch.clientY,
+        event.clientX,
+        event.clientY,
       );
     };
 
-    const onMouseDown = (
-      event: MouseEvent,
+    const onPointerCancel = (
+      event: PointerEvent,
     ) => {
-      event.preventDefault();
-      event.stopPropagation();
+      if (
+        pointerStart?.pointerId ===
+        event.pointerId
+      ) {
+        pointerStart = null;
+      }
     };
 
     const onClick = (
@@ -1019,8 +1092,8 @@ export const TouchMagnifierController: FC = () => {
       event.stopPropagation();
 
       /*
-       * Sur certains navigateurs, un touchend
-       * est suivi d'un click synthétique.
+       * Ignorer le click artificiel qui suit
+       * éventuellement un pointerup tactile.
        */
       if (
         Date.now() -
@@ -1037,32 +1110,23 @@ export const TouchMagnifierController: FC = () => {
     };
 
     lens.addEventListener(
-      "touchstart",
-      onTouchStart,
-      {
-        passive: false,
-      },
+      "pointerdown",
+      onPointerDown,
     );
 
     lens.addEventListener(
-      "touchmove",
-      onTouchMove,
-      {
-        passive: false,
-      },
+      "pointermove",
+      onPointerMove,
     );
 
     lens.addEventListener(
-      "touchend",
-      onTouchEnd,
-      {
-        passive: false,
-      },
+      "pointerup",
+      onPointerUp,
     );
 
     lens.addEventListener(
-      "mousedown",
-      onMouseDown,
+      "pointercancel",
+      onPointerCancel,
     );
 
     lens.addEventListener(
@@ -1072,23 +1136,23 @@ export const TouchMagnifierController: FC = () => {
 
     return () => {
       lens.removeEventListener(
-        "touchstart",
-        onTouchStart,
+        "pointerdown",
+        onPointerDown,
       );
 
       lens.removeEventListener(
-        "touchmove",
-        onTouchMove,
+        "pointermove",
+        onPointerMove,
       );
 
       lens.removeEventListener(
-        "touchend",
-        onTouchEnd,
+        "pointerup",
+        onPointerUp,
       );
 
       lens.removeEventListener(
-        "mousedown",
-        onMouseDown,
+        "pointercancel",
+        onPointerCancel,
       );
 
       lens.removeEventListener(
@@ -1100,18 +1164,38 @@ export const TouchMagnifierController: FC = () => {
     activateLensPoint,
   ]);
 
-  return (
+  const containerRect =
+    sigma
+      .getContainer()
+      .getBoundingClientRect();
+
+  /*
+   * lensPosition est exprimée dans le repère
+   * Sigma. Le portal utilise le repère viewport.
+   */
+  const lensClientLeft =
+    lensPosition
+      ? containerRect.left +
+        lensPosition.left
+      : 0;
+
+  const lensClientTop =
+    lensPosition
+      ? containerRect.top +
+        lensPosition.top
+      : 0;
+
+  return createPortal(
     <canvas
       ref={lensRef}
       aria-hidden="true"
-      className="position-absolute"
       style={{
+        position:
+          "fixed",
         left:
-          lensPosition?.left ??
-          0,
+          lensClientLeft,
         top:
-          lensPosition?.top ??
-          0,
+          lensClientTop,
         width:
           LENS_SIZE,
         height:
@@ -1134,10 +1218,15 @@ export const TouchMagnifierController: FC = () => {
           lensPosition
             ? "pointer"
             : "default",
-        zIndex: 25,
+        zIndex:
+          10000,
         boxShadow:
           "0 4px 14px rgba(0,0,0,0.22)",
+        WebkitTapHighlightColor:
+          "transparent",
       }}
-    />
+    />,
+    document.body,
   );
+
 };
