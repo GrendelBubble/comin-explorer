@@ -1070,15 +1070,36 @@ export const EventsController: FC<EventsControllerProps> = ({
         // Ctrl reste réservé à la sélection multiple.
         if (e.event.original.ctrlKey) return;
 
-        // Un clic dans le vide ferme tous les objets
-        // temporaires mais conserve le contexte développé.
+        /*
+         * Un clic dans le vide replie tout ce qui
+         * a été développé depuis les contextes :
+         *
+         * - posts
+         * - sous-contextes sémantiques
+         * - sources
+         * - containers
+         *
+         * Les nœuds contexte eux-mêmes restent présents.
+         */
         Array.from(
-          expandedContainersRef.current,
-        ).forEach((containerId) => {
-          collapseSourceChildren(containerId);
-        });
+          expandedThemesRef.current,
+        ).forEach((themeId) => {
+          const contextEntry =
+            Object.entries(
+              graphDataset.nodeData,
+            ).find(
+              ([, data]) =>
+                data?.type === "context" &&
+                data.theme_id === themeId,
+            );
 
-        expandedContainersRef.current.clear();
+          if (!contextEntry) return;
+
+          collapseContext(
+            contextEntry[0],
+            themeId,
+          );
+        });
 
         onCloseTransientPanels();
 
