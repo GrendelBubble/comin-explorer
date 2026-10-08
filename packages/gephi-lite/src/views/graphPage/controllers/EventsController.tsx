@@ -1411,6 +1411,60 @@ export const EventsController: FC<EventsControllerProps> = ({
             return;
           }
 
+          /*
+           * Si la recherche précédente avait déplié
+           * un autre contexte pour atteindre un post
+           * ou une source, le replier complètement
+           * avant de sélectionner le nouveau contexte.
+           *
+           * Cela remet le graphe dans son état macro
+           * cohérent avant le recentrage.
+           */
+          Array.from(
+            expandedThemesRef.current,
+          ).forEach(
+            (expandedThemeId) => {
+              if (
+                expandedThemeId ===
+                target.themeId
+              ) {
+                return;
+              }
+
+              const contextEntry =
+                Object.entries(
+                  graphDataset.nodeData,
+                ).find(
+                  ([, data]) =>
+                    data?.type ===
+                      "context" &&
+                    data.theme_id ===
+                      expandedThemeId,
+                );
+
+              if (!contextEntry) {
+                return;
+              }
+
+              collapseContext(
+                contextEntry[0],
+                expandedThemeId,
+              );
+            },
+          );
+
+          /*
+           * Laisser Sigma intégrer les suppressions
+           * de posts/sources avant de déplacer la caméra.
+           */
+          await new Promise<void>(
+            (resolve) => {
+              requestAnimationFrame(
+                () => resolve(),
+              );
+            },
+          );
+
           await selectAndFocusNode(
             `context:${target.themeId}`,
           );
