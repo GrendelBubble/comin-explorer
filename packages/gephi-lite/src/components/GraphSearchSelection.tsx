@@ -47,6 +47,19 @@ export const GraphSearchSelection: FC<
     useState<string | null>(null);
 
   /*
+   * Le survol est temporaire, mais le dernier objet
+   * effectivement sélectionné doit rester identifiable
+   * dans le cartouche.
+   */
+  const [
+    selectedTarget,
+    setSelectedTarget,
+  ] =
+    useState<CominDeepSearchTarget | null>(
+      null,
+    );
+
+  /*
    * Le graphe initial connaît maintenant les posts
    * soutenant chaque contexte. On construit donc
    * l'index inverse post -> contexte.
@@ -125,6 +138,9 @@ export const GraphSearchSelection: FC<
     const q =
       query.trim();
 
+    setSelectedTarget(
+      null,
+    );
     onPreviewChange?.(null);
 
     if (q.length < 2) {
@@ -370,7 +386,12 @@ export const GraphSearchSelection: FC<
   const reveal = (
     target: CominDeepSearchTarget,
   ) => {
-    onPreviewChange?.(target);
+    setSelectedTarget(
+      target,
+    );
+    onPreviewChange?.(
+      target,
+    );
 
     window.dispatchEvent(
       new CustomEvent(
@@ -402,7 +423,7 @@ export const GraphSearchSelection: FC<
       }
       onMouseLeave={() =>
         onPreviewChange?.(
-          null,
+          selectedTarget,
         )
       }
       onFocus={() =>
@@ -412,7 +433,7 @@ export const GraphSearchSelection: FC<
       }
       onBlur={() =>
         onPreviewChange?.(
-          null,
+          selectedTarget,
         )
       }
       onClick={() =>
@@ -461,7 +482,7 @@ export const GraphSearchSelection: FC<
       className={className}
       onMouseLeave={() =>
         onPreviewChange?.(
-          null,
+          selectedTarget,
         )
       }
     >

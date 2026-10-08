@@ -6,7 +6,7 @@ import { Layout } from "../layout";
 import { GraphRendering } from "./GraphRendering";
 
 export const GraphPage: FC = () => {
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(true);
   const [
     searchPreviewItem,
     setSearchPreviewItem,

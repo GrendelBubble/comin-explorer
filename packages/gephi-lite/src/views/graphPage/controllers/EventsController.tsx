@@ -1211,17 +1211,47 @@ export const EventsController: FC<EventsControllerProps> = ({
       async (
         nodeId: string,
       ) => {
+        /*
+         * graph.hasNode() ne suffit pas :
+         * createNode alimente Graphology avant que Sigma
+         * ait produit les coordonnées de rendu du nœud.
+         *
+         * C'est particulièrement visible avec les sources
+         * matérialisées à la volée par la recherche.
+         */
         for (
           let frame = 0;
-          frame < 45;
+          frame < 90;
           frame++
         ) {
+          const graph =
+            sigma.getGraph();
+
           if (
-            sigma
-              .getGraph()
-              .hasNode(nodeId)
+            graph.hasNode(nodeId)
           ) {
-            return true;
+            const displayData =
+              sigma.getNodeDisplayData(
+                nodeId,
+              );
+
+            if (
+              displayData &&
+              Number.isFinite(
+                displayData.x,
+              ) &&
+              Number.isFinite(
+                displayData.y,
+              )
+            ) {
+              return true;
+            }
+
+            /*
+             * Demander explicitement une synchronisation
+             * du renderer lorsque le nœud existe déjà.
+             */
+            sigma.refresh();
           }
 
           await new Promise<void>(
@@ -1258,6 +1288,43 @@ export const EventsController: FC<EventsControllerProps> = ({
           replace: true,
         });
 
+        /*
+         * Le cartouche doit être alimenté immédiatement,
+         * indépendamment du temps nécessaire au déplacement
+         * de la caméra.
+         */
+        setHoveredNode(
+          nodeId,
+        );
+
+        sigma.refresh();
+
+        /*
+         * Laisser une frame à Sigma après la sélection :
+         * AppearanceController peut modifier le rendu et
+         * les dimensions du nœud sélectionné.
+         */
+        await new Promise<void>(
+          (resolve) => {
+            requestAnimationFrame(
+              () =>
+                resolve(),
+            );
+          },
+        );
+
+        /*
+         * Vérifier une seconde fois que le nœud possède
+         * toujours des données de rendu avant le focus.
+         */
+        if (
+          !await waitForRenderedNode(
+            nodeId,
+          )
+        ) {
+          return;
+        }
+
         await fitViewportToNodes(
           sigma,
           [nodeId],
@@ -1266,6 +1333,10 @@ export const EventsController: FC<EventsControllerProps> = ({
           },
         );
 
+        /*
+         * L'animation peut provoquer des rafraîchissements
+         * Sigma ; réaffirmer la cible à son terme.
+         */
         setHoveredNode(
           nodeId,
         );
