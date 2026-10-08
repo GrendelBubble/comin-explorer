@@ -93,6 +93,14 @@ export const EventsController: FC<EventsControllerProps> = ({
     new Map<number, CominPostSourcesGraphResponse>(),
   );
 
+  /*
+   * Une recherche peut déclencher plusieurs opérations asynchrones.
+   * Seule la sélection la plus récente est autorisée à déplacer
+   * finalement la caméra.
+   */
+  const searchNavigationVersionRef =
+    useRef(0);
+
   /**
    * Handle interaction events:
    */
@@ -1270,9 +1278,36 @@ export const EventsController: FC<EventsControllerProps> = ({
     const selectAndFocusNode =
       async (
         nodeId: string,
+        navigationVersion:
+          number,
       ) => {
         if (
+          navigationVersion !==
+          searchNavigationVersionRef.current
+        ) {
+          return;
+        }
+
+        if (
           !await waitForRenderedNode(
+            nodeId,
+          )
+        ) {
+          return;
+        }
+
+        if (
+          navigationVersion !==
+          searchNavigationVersionRef.current
+        ) {
+          return;
+        }
+
+        const graph =
+          sigma.getGraph();
+
+        if (
+          !graph.hasNode(
             nodeId,
           )
         ) {
@@ -1289,54 +1324,95 @@ export const EventsController: FC<EventsControllerProps> = ({
         });
 
         /*
-         * Le cartouche doit être alimenté immédiatement,
-         * indépendamment du temps nécessaire au déplacement
-         * de la caméra.
+         * Alimenter le cartouche immédiatement.
          */
         setHoveredNode(
           nodeId,
         );
 
-        sigma.refresh();
-
         /*
-         * Laisser une frame à Sigma après la sélection :
-         * AppearanceController peut modifier le rendu et
-         * les dimensions du nœud sélectionné.
+         * getNodeDisplayData() contient déjà les coordonnées
+         * normalisées dans l'espace framedGraph utilisé par
+         * la caméra Sigma.
          */
-        await new Promise<void>(
-          (resolve) => {
-            requestAnimationFrame(
-              () =>
-                resolve(),
-            );
-          },
-        );
-
-        /*
-         * Vérifier une seconde fois que le nœud possède
-         * toujours des données de rendu avant le focus.
-         */
-        if (
-          !await waitForRenderedNode(
+        const displayData =
+          sigma.getNodeDisplayData(
             nodeId,
+          );
+
+        if (
+          !displayData ||
+          !Number.isFinite(
+            displayData.x,
+          ) ||
+          !Number.isFinite(
+            displayData.y,
           )
         ) {
           return;
         }
 
-        await fitViewportToNodes(
-          sigma,
-          [nodeId],
+        const target = {
+          x: displayData.x,
+          y: displayData.y,
+        };
+
+        const camera =
+          sigma.getCamera();
+
+        const currentState =
+          camera.getState();
+
+        /*
+         * Conserver le zoom courant sauf si l'on est très
+         * dézoomé. La source doit être non seulement centrée
+         * mais également identifiable.
+         */
+        const targetRatio =
+          Math.min(
+            currentState.ratio,
+            0.75,
+          );
+
+        if (
+          navigationVersion !==
+          searchNavigationVersionRef.current
+        ) {
+          return;
+        }
+
+        await camera.animate(
           {
-            animate: true,
+            x: target.x,
+            y: target.y,
+            ratio: targetRatio,
+          },
+          {
+            duration: 320,
           },
         );
 
         /*
-         * L'animation peut provoquer des rafraîchissements
-         * Sigma ; réaffirmer la cible à son terme.
+         * Une navigation plus récente a pu commencer pendant
+         * l'animation. Dans ce cas l'ancienne ne doit plus agir.
          */
+        if (
+          navigationVersion !==
+          searchNavigationVersionRef.current
+        ) {
+          return;
+        }
+
+        /*
+         * Réaffirmer exactement le centre cible à la fin.
+         * Cela supprime les petits écarts dus aux mises à jour
+         * Sigma intervenues pendant l'animation.
+         */
+        camera.setState({
+          x: target.x,
+          y: target.y,
+        });
+
         setHoveredNode(
           nodeId,
         );
@@ -1469,7 +1545,13 @@ export const EventsController: FC<EventsControllerProps> = ({
       async (
         target:
           CominDeepSearchTarget,
+        navigationVersion:
+          number,
       ) => {
+        const navigationIsCurrent =
+          () =>
+            navigationVersion ===
+            searchNavigationVersionRef.current;
         resetHoveredNode();
 
         if (
@@ -1536,8 +1618,13 @@ export const EventsController: FC<EventsControllerProps> = ({
             },
           );
 
+          if (!navigationIsCurrent()) {
+            return;
+          }
+
           await selectAndFocusNode(
             `context:${target.themeId}`,
+            navigationVersion,
           );
 
           return;
@@ -1568,8 +1655,13 @@ export const EventsController: FC<EventsControllerProps> = ({
             return;
           }
 
+          if (!navigationIsCurrent()) {
+            return;
+          }
+
           await selectAndFocusNode(
             `post:${target.postId}`,
+            navigationVersion,
           );
 
           return;
@@ -1699,8 +1791,13 @@ export const EventsController: FC<EventsControllerProps> = ({
           );
         }
 
+        if (!navigationIsCurrent()) {
+          return;
+        }
+
         await selectAndFocusNode(
           targetNode.id,
+          navigationVersion,
         );
       };
 
@@ -1719,8 +1816,12 @@ export const EventsController: FC<EventsControllerProps> = ({
           return;
         }
 
+        const navigationVersion =
+          ++searchNavigationVersionRef.current;
+
         void revealSearchTarget(
           customEvent.detail,
+          navigationVersion,
         );
       };
 
