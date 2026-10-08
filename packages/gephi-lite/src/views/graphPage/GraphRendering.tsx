@@ -193,9 +193,16 @@ const CominHoverLabel: FC<CominHoverLabelProps> = ({
     return null;
   }
 
+  /*
+   * Un objet réellement survolé dans le graphe est prioritaire
+   * sur la dernière sélection issue de la recherche.
+   *
+   * displayedNode reste brièvement mémorisé après la sortie
+   * du nœud afin de permettre d'atteindre le cartouche.
+   */
   const rawLabel =
-    searchPreviewItem?.label ??
-    data?.label;
+    data?.label ??
+    searchPreviewItem?.label;
 
   const label =
     typeof rawLabel === "string"
@@ -205,8 +212,8 @@ const CominHoverLabel: FC<CominHoverLabelProps> = ({
   if (!label) return null;
 
   const itemType =
-    searchPreviewItem?.type ??
-    data?.type;
+    data?.type ??
+    searchPreviewItem?.type;
 
   let borderColor: string =
     COMIN_UI.nodes.post.borderColor;
@@ -235,6 +242,20 @@ const CominHoverLabel: FC<CominHoverLabelProps> = ({
   }
 
   const activateNode = () => {
+    /*
+     * Le cartouche doit également agir sur ce qu'il affiche :
+     * un nœud survolé passe avant la sélection de recherche.
+     */
+    if (
+      displayedNode &&
+      data
+    ) {
+      onActivateNode(
+        displayedNode,
+      );
+      return;
+    }
+
     if (searchPreviewItem) {
       window.dispatchEvent(
         new CustomEvent(
@@ -244,14 +265,6 @@ const CominHoverLabel: FC<CominHoverLabelProps> = ({
               searchPreviewItem,
           },
         ),
-      );
-
-      return;
-    }
-
-    if (displayedNode) {
-      onActivateNode(
-        displayedNode,
       );
     }
   };
