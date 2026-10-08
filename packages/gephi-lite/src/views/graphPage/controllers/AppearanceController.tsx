@@ -341,30 +341,49 @@ export const AppearanceController: FC<
 
     const getExpandedContainerMask =
       (): CominContainerMask | null => {
-        // Il ne peut y avoir qu'un seul container développé.
-        // Un container développé possède au moins une arête
-        // contains_source actuellement présente dans le graphe.
-        const containerId = graph
-          .nodes()
-          .find((nodeId) => {
-            if (
-              nodeData[nodeId]?.type !==
-              "container"
-            ) {
-              return false;
-            }
+        /*
+         * Le masque historique a été conçu pour un seul
+         * container développé.
+         *
+         * La recherche profonde peut maintenant matérialiser
+         * plusieurs niveaux ou plusieurs branches. Dans ce cas,
+         * un rectangle englobant leurs descendants pourrait
+         * masquer une grande partie, voire la totalité, du graphe.
+         *
+         * On ne masque donc l'arrière-plan que lorsque la situation
+         * correspond encore au cas simple : exactement un container
+         * développé.
+         */
+        const expandedContainerIds =
+          graph
+            .nodes()
+            .filter((nodeId) => {
+              if (
+                nodeData[nodeId]?.type !==
+                "container"
+              ) {
+                return false;
+              }
 
-            return graph
-              .edges(nodeId)
-              .some(
-                (edgeId) =>
-                  edgeData[edgeId]?.type ===
-                    "contains_source" &&
-                  graph.source(edgeId) === nodeId,
-              );
-          });
+              return graph
+                .edges(nodeId)
+                .some(
+                  (edgeId) =>
+                    edgeData[edgeId]?.type ===
+                      "contains_source" &&
+                    graph.source(edgeId) ===
+                      nodeId,
+                );
+            });
 
-        if (!containerId) return null;
+        if (
+          expandedContainerIds.length !== 1
+        ) {
+          return null;
+        }
+
+        const containerId =
+          expandedContainerIds[0];
 
         const protectedNodes =
           new Set<string>([containerId]);
