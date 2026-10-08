@@ -3,6 +3,14 @@
   "outputDirectory": "packages/gephi-lite/build",
   "rewrites": [
     {
+      "source": "/comin-api/search/contexts",
+      "destination": "/api/comin/search/contexts"
+    },
+    {
+      "source": "/comin-api/search/contributions",
+      "destination": "/api/comin/search/contributions"
+    },
+    {
       "source": "/comin-api/graph/contexts",
       "destination": "/api/comin/graph/contexts"
     },

@@ -178,3 +178,85 @@ export async function fetchCominPostSourcesGraph(
 
   return data;
 }
+
+export interface CominContextSearchResult {
+  theme_id: string;
+  title: string;
+  score: number;
+  post_ids: number[];
+}
+
+export interface CominContextSearchResponse {
+  status: "ok";
+  result_count: number;
+  results: CominContextSearchResult[];
+}
+
+export interface CominContributionSearchPost {
+  post_id: number;
+  source_ids: number[];
+  title: string;
+  post_type: string;
+}
+
+export interface CominContributionSearchResult {
+  contribution_id: number;
+  source_id: number;
+  text: string;
+  keywords: string;
+  score: number;
+  source: {
+    title: string;
+    url: string;
+    source_type: string;
+  };
+}
+
+export interface CominContributionSearchResponse {
+  status: "ok";
+  result_count: number;
+  posts?: CominContributionSearchPost[];
+  results: CominContributionSearchResult[];
+}
+
+export async function searchCominContexts(
+  query: string,
+): Promise<CominContextSearchResponse> {
+  const response = await fetch(
+    `/comin-api/search/contexts?query=${encodeURIComponent(query)}`,
+    {
+      headers: {
+        Accept: "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Recherche des contextes indisponible : ${response.status}`,
+    );
+  }
+
+  return (await response.json()) as CominContextSearchResponse;
+}
+
+export async function searchCominContributions(
+  query: string,
+): Promise<CominContributionSearchResponse> {
+  const response = await fetch(
+    `/comin-api/search/contributions?query=${encodeURIComponent(query)}`,
+    {
+      headers: {
+        Accept: "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Recherche profonde indisponible : ${response.status}`,
+    );
+  }
+
+  return (await response.json()) as CominContributionSearchResponse;
+}

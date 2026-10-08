@@ -26,6 +26,7 @@ import {
   CominPostSourceNode,
   CominPostSourcesGraphResponse,
 } from "../../../core/comin/postSourcesGraph";
+import type { CominDeepSearchTarget } from "../../../core/comin/deepSearch";
 import { bindUpHandler } from "../../../utils/events";
 
 const DRAG_EVENTS_TOLERANCE = 3;
@@ -1200,6 +1201,409 @@ export const EventsController: FC<EventsControllerProps> = ({
       activateNodeFromLabel,
     );
 
+    /*
+     * Navigation pilotée par la recherche profonde.
+     *
+     * Elle matérialise uniquement ce qui est nécessaire
+     * pour atteindre l'objet recherché.
+     */
+    const waitForRenderedNode =
+      async (
+        nodeId: string,
+      ) => {
+        for (
+          let frame = 0;
+          frame < 45;
+          frame++
+        ) {
+          if (
+            sigma
+              .getGraph()
+              .hasNode(nodeId)
+          ) {
+            return true;
+          }
+
+          await new Promise<void>(
+            (resolve) => {
+              requestAnimationFrame(
+                () =>
+                  resolve(),
+              );
+            },
+          );
+        }
+
+        return false;
+      };
+
+    const selectAndFocusNode =
+      async (
+        nodeId: string,
+      ) => {
+        if (
+          !await waitForRenderedNode(
+            nodeId,
+          )
+        ) {
+          return;
+        }
+
+        select({
+          type: "nodes",
+          items:
+            new Set([
+              nodeId,
+            ]),
+          replace: true,
+        });
+
+        await fitViewportToNodes(
+          sigma,
+          [nodeId],
+          {
+            animate: true,
+          },
+        );
+
+        setHoveredNode(
+          nodeId,
+        );
+      };
+
+    const ensureSearchContext =
+      async (
+        themeId: string,
+      ) => {
+        const contextNodeId =
+          `context:${themeId}`;
+
+        if (
+          !sigma
+            .getGraph()
+            .hasNode(
+              contextNodeId,
+            )
+        ) {
+          return false;
+        }
+
+        if (
+          !expandedThemesRef.current.has(
+            themeId,
+          )
+        ) {
+          dragEventsCountRef.current =
+            0;
+
+          await activateNode(
+            contextNodeId,
+            false,
+          );
+        }
+
+        return true;
+      };
+
+    const expandSearchContainer =
+      async (
+        containerNodeId: string,
+        postId: number,
+        sourceGraph:
+          CominPostSourcesGraphResponse,
+      ) => {
+        if (
+          !await waitForRenderedNode(
+            containerNodeId,
+          )
+        ) {
+          return;
+        }
+
+        const childEdges =
+          sourceGraph.edges.filter(
+            (edge) =>
+              edge.type ===
+                "contains_source" &&
+              edge.source ===
+                containerNodeId,
+          );
+
+        const children =
+          childEdges
+            .map((edge) =>
+              sourceGraph.nodes.find(
+                (node) =>
+                  node.id ===
+                  edge.target,
+              ),
+            )
+            .filter(
+              (
+                node,
+              ): node is
+                CominPostSourceNode =>
+                node !==
+                undefined,
+            );
+
+        placeChildren(
+          containerNodeId,
+          children,
+          postId,
+        );
+
+        /*
+         * Attendre la matérialisation avant
+         * de poser les liens.
+         */
+        await new Promise<void>(
+          (resolve) => {
+            requestAnimationFrame(
+              () =>
+                resolve(),
+            );
+          },
+        );
+
+        childEdges.forEach(
+          (edge) => {
+            if (
+              !graphDataset.fullGraph.hasEdge(
+                edge.id,
+              )
+            ) {
+              createEdge(
+                edge.id,
+                {
+                  type:
+                    edge.type,
+                  position:
+                    edge.position,
+                },
+                edge.source,
+                edge.target,
+                false,
+              );
+            }
+          },
+        );
+
+        expandedContainersRef.current.add(
+          containerNodeId,
+        );
+      };
+
+    const revealSearchTarget =
+      async (
+        target:
+          CominDeepSearchTarget,
+      ) => {
+        resetHoveredNode();
+
+        if (
+          target.type ===
+          "context"
+        ) {
+          if (
+            !target.themeId
+          ) {
+            return;
+          }
+
+          await selectAndFocusNode(
+            `context:${target.themeId}`,
+          );
+
+          return;
+        }
+
+        if (
+          !target.themeId
+        ) {
+          return;
+        }
+
+        const contextReady =
+          await ensureSearchContext(
+            target.themeId,
+          );
+
+        if (!contextReady) {
+          return;
+        }
+
+        if (
+          target.type ===
+          "post"
+        ) {
+          if (
+            !target.postId
+          ) {
+            return;
+          }
+
+          await selectAndFocusNode(
+            `post:${target.postId}`,
+          );
+
+          return;
+        }
+
+        if (
+          target.type !==
+            "source" ||
+          !target.sourceId ||
+          !target.postId
+        ) {
+          return;
+        }
+
+        const postNodeId =
+          `post:${target.postId}`;
+
+        if (
+          !await waitForRenderedNode(
+            postNodeId,
+          )
+        ) {
+          return;
+        }
+
+        let sourceGraph =
+          postSourcesCacheRef.current.get(
+            target.postId,
+          );
+
+        if (!sourceGraph) {
+          sourceGraph =
+            await fetchCominPostSourcesGraph(
+              target.postId,
+            );
+
+          postSourcesCacheRef.current.set(
+            target.postId,
+            sourceGraph,
+          );
+        }
+
+        /*
+         * Matérialise les racines documentaires du post.
+         */
+        await expandPostSources(
+          postNodeId,
+          target.postId,
+        );
+
+        const targetNode =
+          sourceGraph.nodes.find(
+            (node) =>
+              node.source_id ===
+                target.sourceId,
+          );
+
+        if (!targetNode) {
+          return;
+        }
+
+        /*
+         * Construire le chemin :
+         *
+         * racine -> container -> ... -> source cible
+         */
+        const path: string[] =
+          [];
+
+        let currentId =
+          targetNode.id;
+
+        for (
+          let depth = 0;
+          depth < 30;
+          depth++
+        ) {
+          const parentEdge =
+            sourceGraph.edges.find(
+              (edge) =>
+                edge.type ===
+                  "contains_source" &&
+                edge.target ===
+                  currentId,
+            );
+
+          if (!parentEdge) {
+            break;
+          }
+
+          path.unshift(
+            parentEdge.source,
+          );
+
+          currentId =
+            parentEdge.source;
+        }
+
+        /*
+         * Déplier successivement chacun des
+         * containers du chemin.
+         *
+         * Chaque container affiche tous ses enfants,
+         * exactement comme lors d'une ouverture normale.
+         */
+        for (
+          const containerId
+          of path
+        ) {
+          const container =
+            sourceGraph.nodes.find(
+              (node) =>
+                node.id ===
+                  containerId &&
+                node.type ===
+                  "container",
+            );
+
+          if (!container) {
+            continue;
+          }
+
+          await expandSearchContainer(
+            containerId,
+            target.postId,
+            sourceGraph,
+          );
+        }
+
+        await selectAndFocusNode(
+          targetNode.id,
+        );
+      };
+
+    const revealSearchTargetFromUi:
+      EventListener = (
+        event,
+      ) => {
+        const customEvent =
+          event as CustomEvent<
+            CominDeepSearchTarget
+          >;
+
+        if (
+          !customEvent.detail
+        ) {
+          return;
+        }
+
+        void revealSearchTarget(
+          customEvent.detail,
+        );
+      };
+
+    window.addEventListener(
+      "comin-reveal-search-target",
+      revealSearchTargetFromUi,
+    );
+
     const upHandler = () => {
       const dragState = dragStateRef.current;
       if (dragState.type === "downing" || dragState.type === "dragging") {
@@ -1223,6 +1627,12 @@ export const EventsController: FC<EventsControllerProps> = ({
     const unbind = bindUpHandler(upHandler);
     return () => {
       unbind();
+
+      window.removeEventListener(
+        "comin-reveal-search-target",
+        revealSearchTargetFromUi,
+      );
+
       onNodeActivatorReady(null);
     };
   }, [

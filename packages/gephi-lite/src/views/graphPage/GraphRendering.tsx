@@ -28,6 +28,7 @@ import {
   CominContextChildPostNode,
   CominContextSemanticNode,
 } from "../../core/comin/contextChildrenGraph";
+import type { CominDeepSearchTarget } from "../../core/comin/deepSearch";
 import { COMIN_UI } from "../../core/comin/uiPreset";
 import { GRAPH_SELECTION_MODES } from "../../core/selection/types";
 import { resetCamera } from "../../core/sigma";
@@ -139,11 +140,16 @@ const GraphCaptionLayer: FC = () => {
 };
 
 interface CominHoverLabelProps {
-  onActivateNode: (nodeId: string) => void;
+  onActivateNode: (
+    nodeId: string,
+  ) => void;
+  searchPreviewItem:
+    CominDeepSearchTarget | null;
 }
 
 const CominHoverLabel: FC<CominHoverLabelProps> = ({
   onActivateNode,
+  searchPreviewItem,
 }) => {
   const { nodeData } = useGraphDataset();
   const { hoveredNode } = useSigmaState();
@@ -173,13 +179,23 @@ const CominHoverLabel: FC<CominHoverLabelProps> = ({
     return () => window.clearTimeout(timeout);
   }, [hoveredNode, labelHovered]);
 
-  if (!displayedNode) return null;
+  const data =
+    displayedNode
+      ? nodeData[
+          displayedNode
+        ]
+      : undefined;
 
-  const data = nodeData[displayedNode];
+  if (
+    !searchPreviewItem &&
+    !data
+  ) {
+    return null;
+  }
 
-  if (!data) return null;
-
-  const rawLabel = data.label;
+  const rawLabel =
+    searchPreviewItem?.label ??
+    data?.label;
 
   const label =
     typeof rawLabel === "string"
@@ -188,34 +204,56 @@ const CominHoverLabel: FC<CominHoverLabelProps> = ({
 
   if (!label) return null;
 
+  const itemType =
+    searchPreviewItem?.type ??
+    data?.type;
+
   let borderColor: string =
     COMIN_UI.nodes.post.borderColor;
 
-  if (data.type === "context") {
+  if (itemType === "context") {
     borderColor =
       COMIN_UI.nodes.context.color;
   } else if (
-    data.type === "context_semantic" ||
-    data.type === "context_unit"
+    itemType === "context_semantic" ||
+    itemType === "context_unit"
   ) {
     borderColor =
       COMIN_UI.nodes.contextSemantic.color;
-  } else if (data.type === "post") {
+  } else if (itemType === "post") {
     borderColor =
-      typeof data.post_type_color === "string" &&
+      typeof data?.post_type_color === "string" &&
       data.post_type_color.trim()
         ? data.post_type_color
         : COMIN_UI.nodes.post.color;
-  } else if (data.type === "source") {
+  } else if (itemType === "source") {
     borderColor =
       COMIN_UI.nodes.source.color;
-  } else if (data.type === "container") {
+  } else if (itemType === "container") {
     borderColor =
       COMIN_UI.nodes.structuralSource.borderColor;
   }
 
   const activateNode = () => {
-    onActivateNode(displayedNode);
+    if (searchPreviewItem) {
+      window.dispatchEvent(
+        new CustomEvent(
+          "comin-reveal-search-target",
+          {
+            detail:
+              searchPreviewItem,
+          },
+        ),
+      );
+
+      return;
+    }
+
+    if (displayedNode) {
+      onActivateNode(
+        displayedNode,
+      );
+    }
   };
 
   return (
@@ -287,7 +325,16 @@ const sigmaSettings: Partial<Settings> = {
   },
   allowInvalidContainer: true,
 };
-export const GraphRendering: FC = () => {
+interface GraphRenderingProps {
+  searchPreviewItem:
+    CominDeepSearchTarget | null;
+}
+
+export const GraphRendering: FC<
+  GraphRenderingProps
+> = ({
+  searchPreviewItem,
+}) => {
   const [contextSemanticItem, setContextSemanticItem] =
     useState<CominContextSemanticNode | null>(null);
   const [postNoteItem, setPostNoteItem] =
@@ -390,7 +437,12 @@ export const GraphRendering: FC = () => {
 
       {isCominGraph && (
         <CominHoverLabel
-          onActivateNode={activateNodeFromLabel}
+          onActivateNode={
+            activateNodeFromLabel
+          }
+          searchPreviewItem={
+            searchPreviewItem
+          }
         />
       )}
 

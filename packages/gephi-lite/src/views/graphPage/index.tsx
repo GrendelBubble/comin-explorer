@@ -1,11 +1,18 @@
 import { FC, useState } from "react";
 
 import { GraphSearchSelection } from "../../components/GraphSearchSelection";
+import type { CominDeepSearchTarget } from "../../core/comin/deepSearch";
 import { Layout } from "../layout";
 import { GraphRendering } from "./GraphRendering";
 
 export const GraphPage: FC = () => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [
+    searchPreviewItem,
+    setSearchPreviewItem,
+  ] = useState<CominDeepSearchTarget | null>(
+    null,
+  );
 
   return (
     <Layout
@@ -20,14 +27,30 @@ export const GraphPage: FC = () => {
         }`}
       >
         <div className="panel-body">
-          <GraphSearchSelection />
+          <GraphSearchSelection
+            onPreviewChange={
+              setSearchPreviewItem
+            }
+          />
         </div>
       </div>
 
       <button
         type="button"
         className="comin-search-toggle"
-        onClick={() => setIsSearchOpen((open) => !open)}
+        onClick={() => {
+          setIsSearchOpen(
+            (open) => {
+              if (open) {
+                setSearchPreviewItem(
+                  null,
+                );
+              }
+
+              return !open;
+            },
+          );
+        }}
         aria-label={
           isSearchOpen
             ? "Fermer la recherche"
@@ -43,7 +66,11 @@ export const GraphPage: FC = () => {
       </button>
 
       <div className="filler">
-        <GraphRendering />
+        <GraphRendering
+          searchPreviewItem={
+            searchPreviewItem
+          }
+        />
       </div>
     </Layout>
   );

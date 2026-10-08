@@ -5,6 +5,7 @@ export interface CominContextGraphNode {
   type: "context";
   theme_id: string;
   label: string;
+  post_ids?: number[];
 }
 
 export interface CominContextGraphEdge {
@@ -128,6 +129,10 @@ export function cominContextGraphToGraph(data: CominContextGraphResponse): Graph
         label: node.label,
         type: node.type,
         theme_id: node.theme_id,
+        cominPostIds:
+          Array.isArray(node.post_ids)
+            ? node.post_ids.join(",")
+            : "",
         cominRadialLabel: true,
         cominLabelPlacement,
         cominLabelLaneIndex: lane?.index ?? 0,
