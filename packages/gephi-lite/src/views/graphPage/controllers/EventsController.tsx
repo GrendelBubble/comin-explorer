@@ -1404,14 +1404,61 @@ export const EventsController: FC<EventsControllerProps> = ({
         }
 
         /*
-         * Réaffirmer exactement le centre cible à la fin.
-         * Cela supprime les petits écarts dus aux mises à jour
-         * Sigma intervenues pendant l'animation.
+         * Laisser passer les derniers rafraîchissements liés
+         * à la sélection, au hover et au dépliage.
          */
-        camera.setState({
-          x: target.x,
-          y: target.y,
-        });
+        await new Promise<void>(
+          (resolve) => {
+            requestAnimationFrame(
+              () => {
+                requestAnimationFrame(
+                  () => resolve(),
+                );
+              },
+            );
+          },
+        );
+
+        if (
+          navigationVersion !==
+          searchNavigationVersionRef.current
+        ) {
+          return;
+        }
+
+        sigma.refresh();
+
+        await new Promise<void>(
+          (resolve) => {
+            requestAnimationFrame(
+              () => resolve(),
+            );
+          },
+        );
+
+        /*
+         * Reprendre la position effectivement utilisée par Sigma
+         * au tout dernier instant. C'est ce centrage qui fait foi.
+         */
+        const finalDisplayData =
+          sigma.getNodeDisplayData(
+            nodeId,
+          );
+
+        if (
+          finalDisplayData &&
+          Number.isFinite(
+            finalDisplayData.x,
+          ) &&
+          Number.isFinite(
+            finalDisplayData.y,
+          )
+        ) {
+          camera.setState({
+            x: finalDisplayData.x,
+            y: finalDisplayData.y,
+          });
+        }
 
         setHoveredNode(
           nodeId,
