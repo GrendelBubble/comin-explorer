@@ -199,13 +199,24 @@ export const GraphSearchSelection: FC<
                 ? contributionResponse.posts
                 : [];
 
+            const titlePosts =
+              Array.isArray(
+                contributionResponse.title_posts,
+              )
+                ? contributionResponse.title_posts
+                : [];
+
             /*
              * On ne présente dans cette première version
              * que les posts qui possèdent un chemin
              * déterministe vers un contexte du graphe.
              */
             const postTargets =
-              searchPosts
+              [...titlePosts, ...searchPosts.filter(
+                (post) => !titlePosts.some(
+                  (titlePost) => titlePost.post_id === post.post_id,
+                ),
+              )]
                 .map((post) => {
                   const themeId =
                     postToThemes.get(
@@ -238,11 +249,13 @@ export const GraphSearchSelection: FC<
                     postId:
                       post.post_id,
                     score:
-                      scores.length
-                        ? Math.max(
-                            ...scores,
-                          )
-                        : 0,
+                      titlePosts.some(
+                        (titlePost) => titlePost.post_id === post.post_id,
+                      )
+                        ? 1000
+                        : scores.length
+                          ? Math.max(...scores)
+                          : 0,
                   };
                 })
                 .filter(

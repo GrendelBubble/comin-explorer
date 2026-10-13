@@ -216,6 +216,7 @@ export interface CominContributionSearchResponse {
   status: "ok";
   result_count: number;
   posts?: CominContributionSearchPost[];
+  title_posts?: CominContributionSearchPost[];
   results: CominContributionSearchResult[];
 }
 
