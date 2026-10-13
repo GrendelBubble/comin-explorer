@@ -12,6 +12,12 @@ import {
 import type { CominDeepSearchTarget } from "../core/comin/deepSearch";
 import { useGraphDataset } from "../core/context/dataContexts";
 
+function decodeHtmlEntities(value: string): string {
+  return new DOMParser()
+    .parseFromString(value, "text/html")
+    .documentElement.textContent ?? value;
+}
+
 interface GraphSearchSelectionProps {
   className?: string;
   onPreviewChange?: (
@@ -456,7 +462,7 @@ export const GraphSearchSelection: FC<
       </div>
 
       <div>
-        {target.label}
+        {decodeHtmlEntities(target.label)}
       </div>
 
       {target.excerpt && (
