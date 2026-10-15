@@ -2,32 +2,54 @@ import { NoteReaderFrame } from "./NoteReaderFrame";
 import { FC, useEffect, useState } from "react";
 
 import { fetchCominContextChildrenGraph } from "../../core/comin/api";
-import { CominContextSemanticNode } from "../../core/comin/contextChildrenGraph";
+import { CominContextSemanticNode, CominContextChildPostNode } from "../../core/comin/contextChildrenGraph";
 
 interface ContextSemanticReaderProps {
   item: CominContextSemanticNode | null;
   onClose: () => void;
+  onOpenPost: (post: CominContextChildPostNode) => void;
 }
 
 export const ContextSemanticReader: FC<
   ContextSemanticReaderProps
-> = ({ item, onClose }) => {
+> = ({ item, onClose, onOpenPost }) => {
   const [current, setCurrent] = useState<CominContextSemanticNode | null>(null);
   const [sections, setSections] = useState<CominContextSemanticNode[]>([]);
+
+  const [posts, setPosts] = useState<CominContextChildPostNode[]>([]);
+  const [postsReady, setPostsReady] = useState(false);
+  const [postsError, setPostsError] = useState(false);
 
   useEffect(() => {
     setCurrent(item);
     setSections([]);
+    setPosts([]);
+    setPostsReady(false);
+    setPostsError(false);
     if (!item) return;
     let active = true;
     fetchCominContextChildrenGraph(item.theme_id)
       .then((data) => {
-        if (active) setSections(data.nodes.filter(
+        if (!active) return;
+        setSections(data.nodes.filter(
           (node): node is CominContextSemanticNode =>
             node.type === "context_semantic",
         ));
+        setPosts(data.nodes.filter(
+          (node): node is CominContextChildPostNode =>
+            node.type === "post",
+        ).sort((a, b) =>
+          b.supporting_contribution_count - a.supporting_contribution_count ||
+          a.label.localeCompare(b.label, "fr")
+        ));
+        setPostsReady(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (active) {
+          setPostsError(true);
+          setPostsReady(true);
+        }
+      });
     return () => { active = false; };
   }, [item]);
 
@@ -98,6 +120,43 @@ export const ContextSemanticReader: FC<
             </p>
           ))}
         </div>
+
+        {(current?.semantic_kind ?? item.semantic_kind) === "synthese" && (
+          <section className="mt-5">
+            <h2>Publications contribuant à ce contexte</h2>
+
+            {!postsReady && <p>Chargement des publications…</p>}
+            {postsError && <p>Liste des publications indisponible.</p>}
+
+            {postsReady && !postsError && (
+              <>
+                <p>{posts.length} publication(s)</p>
+                {posts.length > 0 && (
+                  <details open>
+                    <summary>Afficher ou masquer la liste</summary>
+                    <ul className="mt-3">
+                      {posts.map((post) => (
+                        <li key={post.post_id} className="mb-3">
+                          <button
+                            type="button"
+                            className="btn btn-link p-0 text-start"
+                            onClick={() => onOpenPost(post)}
+                          >
+                            {post.label}
+                          </button>
+                          <div className="small text-muted">
+                            {post.supporting_contribution_count}
+                            {" contribution(s) au contexte"}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </>
+            )}
+          </section>
+        )}
     </NoteReaderFrame>
   );
 };
