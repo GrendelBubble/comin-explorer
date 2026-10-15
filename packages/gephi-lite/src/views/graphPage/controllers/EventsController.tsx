@@ -49,6 +49,7 @@ interface EventsControllerProps {
   onOpenPostNote: (
     item: CominContextChildPostNode,
   ) => void;
+  onOpenSourceNote: (item: CominPostSourceNode, postId: number) => void;
   onCloseTransientPanels: () => void;
   onNodeActivatorReady: (
     activator:
@@ -63,6 +64,7 @@ interface EventsControllerProps {
 export const EventsController: FC<EventsControllerProps> = ({
   onOpenContextSemantic,
   onOpenPostNote,
+  onOpenSourceNote,
   onCloseTransientPanels,
   onNodeActivatorReady,
   onExpandedThemeChange,
@@ -452,7 +454,6 @@ export const EventsController: FC<EventsControllerProps> = ({
           containerNodeId,
         )
       ) {
-        collapseSourceChildren(containerNodeId);
         return;
       }
 
@@ -663,6 +664,7 @@ export const EventsController: FC<EventsControllerProps> = ({
     const activateNode = async (
       node: string,
       ctrlKey = false,
+      openContextNote = true,
     ) => {
         if (suppressTouchTap()) return;
         if (dragEventsCountRef.current >= DRAG_EVENTS_TOLERANCE) return;
@@ -678,39 +680,13 @@ export const EventsController: FC<EventsControllerProps> = ({
           return;
         }
 
-        if (
-          nodeData?.type === "source" &&
-          typeof nodeData.url === "string" &&
-          nodeData.url
-        ) {
-          closeMagnifier();
-
-          window.open(
-            nodeData.url,
-            "_blank",
-            "noopener,noreferrer",
-          );
-          return;
-        }
-
-        if (
-          nodeData?.type === "container"
-        ) {
-          const postId = Number(
-            (
-              nodeData as unknown as {
-                cominPostId?: number;
-              }
-            ).cominPostId,
-          );
-
+        if (nodeData?.type === "source" || nodeData?.type === "container") {
+          const postId = Number((nodeData as { cominPostId?: number }).cominPostId);
           if (postId > 0) {
-            await toggleContainer(
-              node,
-              postId,
-            );
+            closeMagnifier();
+            onOpenSourceNote(nodeData as unknown as CominPostSourceNode, postId);
+            if (nodeData.type === "container") await toggleContainer(node, postId);
           }
-
           return;
         }
 
@@ -778,10 +754,13 @@ export const EventsController: FC<EventsControllerProps> = ({
 
         const themeId = nodeData.theme_id;
         if (typeof themeId !== "string") return;
-        if (
-          expandedThemesRef.current.has(themeId)
-        ) {
-          collapseContext(node, themeId);
+        if (expandedThemesRef.current.has(themeId)) {
+          const data = await fetchCominContextChildrenGraph(themeId);
+          const synthesis = data.nodes.find(
+            (entry): entry is CominContextSemanticNode => entry.type === "context_semantic" &&
+              entry.semantic_kind === "synthese",
+          );
+          if (synthesis && openContextNote) onOpenContextSemantic(synthesis);
           return;
         }
 
@@ -821,6 +800,12 @@ export const EventsController: FC<EventsControllerProps> = ({
         try {
           const postGraph =
             await fetchCominContextChildrenGraph(themeId);
+          const synthesis = postGraph.nodes.find(
+            (entry): entry is CominContextSemanticNode => entry.type === "context_semantic" &&
+              entry.semantic_kind === "synthese",
+          );
+          if (synthesis && openContextNote) onOpenContextSemantic(synthesis);
+
 
           const center =
             sigma.getGraph().getNodeAttributes(node);
@@ -878,7 +863,7 @@ export const EventsController: FC<EventsControllerProps> = ({
 
           const semanticChildren = postGraph.nodes
             .filter(
-              (item) => item.type === "context_semantic",
+              (item): item is CominContextSemanticNode => item.type === "context_semantic" && item.semantic_kind !== "synthese",
             )
             .sort((a, b) => {
               const order = {
@@ -1493,6 +1478,7 @@ export const EventsController: FC<EventsControllerProps> = ({
           await activateNode(
             contextNodeId,
             false,
+            false,
           );
         }
 
@@ -1927,6 +1913,7 @@ export const EventsController: FC<EventsControllerProps> = ({
     globalEmitter,
     onOpenContextSemantic,
     onOpenPostNote,
+    onOpenSourceNote,
     onCloseTransientPanels,
     onNodeActivatorReady,
     onExpandedThemeChange,
