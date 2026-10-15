@@ -1,5 +1,7 @@
-import { FC, useEffect } from "react";
+import { NoteReaderFrame } from "./NoteReaderFrame";
+import { FC, useEffect, useState } from "react";
 
+import { fetchCominContextChildrenGraph } from "../../core/comin/api";
 import { CominContextSemanticNode } from "../../core/comin/contextChildrenGraph";
 
 interface ContextSemanticReaderProps {
@@ -10,6 +12,25 @@ interface ContextSemanticReaderProps {
 export const ContextSemanticReader: FC<
   ContextSemanticReaderProps
 > = ({ item, onClose }) => {
+  const [current, setCurrent] = useState<CominContextSemanticNode | null>(null);
+  const [sections, setSections] = useState<CominContextSemanticNode[]>([]);
+
+  useEffect(() => {
+    setCurrent(item);
+    setSections([]);
+    if (!item) return;
+    let active = true;
+    fetchCominContextChildrenGraph(item.theme_id)
+      .then((data) => {
+        if (active) setSections(data.nodes.filter(
+          (node): node is CominContextSemanticNode =>
+            node.type === "context_semantic",
+        ));
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [item]);
+
   useEffect(() => {
     if (item === null) return;
 
@@ -31,7 +52,7 @@ export const ContextSemanticReader: FC<
 
   if (item === null) return null;
 
-  const rawUnits: unknown = item.units;
+  const rawUnits: unknown = current?.units ?? item.units;
   let units: CominContextSemanticNode["units"] = [];
 
   if (Array.isArray(rawUnits)) {
@@ -50,56 +71,25 @@ export const ContextSemanticReader: FC<
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={item.label}
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          onClose();
-        }
-      }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 10000,
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        padding: "3vh 3vw",
-        background: "rgba(35, 39, 42, 0.42)",
-      }}
-    >
-      <article
-        className="gl-container-highest-bg"
-        style={{
-          position: "relative",
-          width: "min(900px, 94vw)",
-          maxHeight: "92vh",
-          overflowY: "auto",
-          padding: "48px 56px 56px",
-          borderRadius: "8px",
-          boxShadow:
-            "0 18px 60px rgba(0, 0, 0, 0.28)",
-        }}
-      >
-        <button
-          type="button"
-          className="gl-btn gl-btn-icon"
-          onClick={onClose}
-          aria-label="Fermer"
-          title="Fermer"
-          style={{
-            position: "absolute",
-            top: 16,
-            right: 16,
-            fontSize: "24px",
-          }}
-        >
-          ×
-        </button>
-
-        <h1>{item.label}</h1>
+    <NoteReaderFrame label={item.label} onClose={onClose}>
+        <h1>{current?.label ?? item.label}</h1>
+        <nav aria-label="Autres notes du contexte" className="d-flex flex-wrap gap-3 mt-3">
+          {sections
+            .filter((section) => section.semantic_kind !== (current?.semantic_kind ?? item.semantic_kind))
+            .map((section) => (
+              <button
+                key={section.semantic_kind}
+                type="button"
+                className="btn btn-link p-0"
+                onClick={() => {
+                  setCurrent(section);
+                  document.querySelector("[aria-modal=true] article")?.scrollTo({ top: 0 });
+                }}
+              >
+                {section.label}
+              </button>
+            ))}
+        </nav>
 
         <div className="d-flex flex-column gl-gap-4 mt-4">
           {units.map((unit) => (
@@ -108,7 +98,6 @@ export const ContextSemanticReader: FC<
             </p>
           ))}
         </div>
-      </article>
-    </div>
+    </NoteReaderFrame>
   );
 };

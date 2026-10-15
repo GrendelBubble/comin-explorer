@@ -417,14 +417,28 @@ export const GraphRendering: FC<
         }}
       >
         <EventsController
-          onOpenContextSemantic={setContextSemanticItem}
-          onOpenPostNote={(post: CominContextChildPostNode) =>
+          onOpenContextSemantic={(item) => {
+            setPostNoteItem(null);
+            setContextSemanticItem(item);
+          }}
+          onOpenPostNote={(post: CominContextChildPostNode) => {
+            setContextSemanticItem(null);
             setPostNoteItem({
               postId: post.post_id,
               label: post.label,
               url: post.url,
-            })
-          }
+            });
+          }}
+          onOpenSourceNote={(source, postId) => {
+            setContextSemanticItem(null);
+            setPostNoteItem({
+              postId,
+              label: source.label,
+              url: source.url,
+              sourceId: source.source_id,
+              isContainer: source.type === "container",
+            });
+          }}
           onCloseTransientPanels={closeTransientPanels}
           onNodeActivatorReady={registerNodeActivator}
           onExpandedThemeChange={setExpandedThemeId}
