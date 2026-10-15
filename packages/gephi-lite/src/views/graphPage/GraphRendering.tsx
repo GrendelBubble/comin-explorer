@@ -152,8 +152,8 @@ const CominHoverLabel: FC<CominHoverLabelProps> = ({
   onActivateNode,
   searchPreviewItem,
 }) => {
-  const { nodeData, edgeData } = useGraphDataset();
-  const { hoveredNode, hoveredEdge } = useSigmaState();
+  const { nodeData } = useGraphDataset();
+  const { hoveredNode } = useSigmaState();
 
   /*
    * Le cartouche reste brièvement affiché lorsque le pointeur
@@ -186,12 +186,6 @@ const CominHoverLabel: FC<CominHoverLabelProps> = ({
           displayedNode
         ]
       : undefined;
-
-  if (
-    !hoveredNode &&
-    hoveredEdge &&
-    edgeData[hoveredEdge]?.type === "related"
-  ) return null;
 
   if (
     !searchPreviewItem &&
@@ -319,57 +313,6 @@ const CominHoverLabel: FC<CominHoverLabelProps> = ({
     >
       {label}
     </button>
-  );
-};
-
-const CominRelationHoverLabel: FC = () => {
-  const { nodeData, edgeData, fullGraph } = useGraphDataset();
-  const { hoveredNode, hoveredEdge } = useSigmaState();
-
-  if (
-    hoveredNode ||
-    !hoveredEdge ||
-    !fullGraph.hasEdge(hoveredEdge) ||
-    edgeData[hoveredEdge]?.type !== "related"
-  ) return null;
-
-  const a = nodeData[fullGraph.source(hoveredEdge)];
-  const b = nodeData[fullGraph.target(hoveredEdge)];
-
-  if (a?.type !== "context" || b?.type !== "context")
-    return null;
-
-  const reciprocal = edgeData[hoveredEdge]?.reciprocal === true;
-
-  return (
-    <div
-      role="status"
-      style={{
-        position: "fixed",
-        left: "50%",
-        top: 12,
-        transform: "translateX(-50%)",
-        maxWidth: "75%",
-        padding: "9px 14px",
-        backgroundColor: COMIN_UI.background,
-        color: "inherit",
-        border: `2px solid ${COMIN_UI.nodes.context.color}`,
-        borderRadius: 8,
-        fontFamily: "inherit",
-        textAlign: "center",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-        zIndex: 151,
-        pointerEvents: "none",
-      }}
-    >
-      <strong>{a.label} ↔ {b.label}</strong>
-      <div style={{ fontSize: 12, marginTop: 4 }}>
-        {reciprocal
-          ? "Relation déclarée par les deux contextes"
-          : "Relation déclarée par un seul contexte"}
-        {" — Cliquez sur le lien pour consulter sa note"}
-      </div>
-    </div>
   );
 };
 
@@ -559,8 +502,6 @@ export const GraphRendering: FC<
           });
         }}
       />
-      {isCominGraph && <CominRelationHoverLabel />}
-
       <ContextSemanticReader
         item={contextSemanticItem}
         onClose={() => setContextSemanticItem(null)}
