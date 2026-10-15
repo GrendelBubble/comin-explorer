@@ -33,6 +33,10 @@
     {
       "source": "/comin-api/graph/posts/:post_id/sources",
       "destination": "/api/comin/graph/posts/:post_id/sources"
+    },
+    {
+      "source": "/comin-api/graph/posts/:post_id/sources/:source_id/note",
+      "destination": "/api/comin/graph/posts/:post_id/sources/:source_id/note"
     }
   ]
 }
