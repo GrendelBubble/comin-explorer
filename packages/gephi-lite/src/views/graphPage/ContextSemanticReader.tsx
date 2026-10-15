@@ -15,6 +15,7 @@ export const ContextSemanticReader: FC<
 > = ({ item, onClose, onOpenPost }) => {
   const [current, setCurrent] = useState<CominContextSemanticNode | null>(null);
   const [sections, setSections] = useState<CominContextSemanticNode[]>([]);
+  const [contextTitle, setContextTitle] = useState<string | null>(null);
 
   const [posts, setPosts] = useState<CominContextChildPostNode[]>([]);
   const [postsReady, setPostsReady] = useState(false);
@@ -23,6 +24,7 @@ export const ContextSemanticReader: FC<
   useEffect(() => {
     setCurrent(item);
     setSections([]);
+    setContextTitle(null);
     setPosts([]);
     setPostsReady(false);
     setPostsError(false);
@@ -31,6 +33,15 @@ export const ContextSemanticReader: FC<
     fetchCominContextChildrenGraph(item.theme_id)
       .then((data) => {
         if (!active) return;
+
+        const context = data.nodes.find(
+          (node) =>
+            node.type === "context" &&
+            node.theme_id === item.theme_id,
+        );
+
+        setContextTitle(context?.label ?? null);
+
         setSections(data.nodes.filter(
           (node): node is CominContextSemanticNode =>
             node.type === "context_semantic",
@@ -93,8 +104,19 @@ export const ContextSemanticReader: FC<
   }
 
   return (
-    <NoteReaderFrame label={item.label} onClose={onClose}>
-        <h1>{current?.label ?? item.label}</h1>
+    <NoteReaderFrame
+      label={contextTitle
+        ? `${contextTitle} — ${current?.label ?? item.label}`
+        : current?.label ?? item.label}
+      onClose={onClose}
+    >
+        {contextTitle && (
+          <>
+            <p className="small text-muted mb-2">CONTEXTE</p>
+            <h1 className="mb-3">{contextTitle}</h1>
+          </>
+        )}
+        <h2>{current?.label ?? item.label}</h2>
         <nav aria-label="Autres notes du contexte" className="d-flex flex-wrap gap-3 mt-3">
           {sections
             .filter((section) => section.semantic_kind !== (current?.semantic_kind ?? item.semantic_kind))
