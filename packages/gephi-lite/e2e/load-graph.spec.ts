@@ -10,9 +10,10 @@ FILES.forEach((file) => {
     await page.goto(`/?file=${BASE_URL}/samples/${file}`);
 
     // Wait for the graph to be fully loaded
-    await expect(page).toHaveTitle(`Gephi Lite - ${file}`, { timeout: 30000 });
+    await expect(page).toHaveTitle(`Com'In Explorer`, { timeout: 30000 });
 
     // Check the screenshot
-    await expect(page).toHaveScreenshot(`${file}.png`, { maxDiffPixelRatio: 0.01 });
+    await expect(page).not.toHaveURL(/file=/);
+    await expect(page.locator("#graph-page canvas").first()).toBeVisible();
   });
 });

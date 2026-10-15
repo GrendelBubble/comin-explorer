@@ -654,7 +654,7 @@ export const AppearanceController: FC<
             COMIN_UI.nodes.structuralSource.color;
           res.borderColor =
             COMIN_UI.nodes.structuralSource.borderColor;
-          res.borderSize = 1.5;
+          res.borderSize = 2.5;
           res.type = "diamond";
           res.size =
             COMIN_UI.nodes.structuralSource.size;
@@ -718,7 +718,7 @@ export const AppearanceController: FC<
             ? memoizedDarken(res.color || DEFAULT_NODE_COLOR)
             : memoizedBrighten(res.color || DEFAULT_NODE_COLOR);
         res.zIndex = -1;
-        res.type = "bordered";
+        res.type = nodeData[id]?.type === "container" ? "diamond" : "bordered";
       }
 
       if (id === hoveredNode || highlightedNodes?.has(id)) res.highlighted = true;
