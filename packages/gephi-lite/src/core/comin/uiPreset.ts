@@ -22,7 +22,7 @@ export const COMIN_UI = {
     structuralSource: {
       color: "#9A9185",
       borderColor: "#544B43",
-      size: 8,
+      size: 11,
     },
   },
 
