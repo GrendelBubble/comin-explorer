@@ -27,6 +27,7 @@ import {
   CominPostSourcesGraphResponse,
 } from "../../../core/comin/postSourcesGraph";
 import type { CominDeepSearchTarget } from "../../../core/comin/deepSearch";
+import type { RelationNoteItem } from "../RelationNoteReader";
 import { bindUpHandler } from "../../../utils/events";
 
 const DRAG_EVENTS_TOLERANCE = 3;
@@ -50,6 +51,7 @@ interface EventsControllerProps {
     item: CominContextChildPostNode,
   ) => void;
   onOpenSourceNote: (item: CominPostSourceNode, postId: number) => void;
+  onOpenRelationNote: (item: RelationNoteItem) => void;
   onCloseTransientPanels: () => void;
   onNodeActivatorReady: (
     activator:
@@ -65,6 +67,7 @@ export const EventsController: FC<EventsControllerProps> = ({
   onOpenContextSemantic,
   onOpenPostNote,
   onOpenSourceNote,
+  onOpenRelationNote,
   onCloseTransientPanels,
   onNodeActivatorReady,
   onExpandedThemeChange,
@@ -1065,6 +1068,32 @@ export const EventsController: FC<EventsControllerProps> = ({
       clickEdge({ edge, event }) {
         if (suppressTouchTap()) return;
 
+        if (
+          !event.original.ctrlKey &&
+          graphDataset.edgeData[edge]?.type === "related"
+        ) {
+          const graph = graphDataset.fullGraph;
+          if (!graph.hasEdge(edge)) return;
+
+          const a = graphDataset.nodeData[graph.source(edge)];
+          const b = graphDataset.nodeData[graph.target(edge)];
+
+          if (
+            a?.type === "context" &&
+            b?.type === "context" &&
+            typeof a.theme_id === "string" &&
+            typeof b.theme_id === "string"
+          ) {
+            onOpenRelationNote({
+              source: { themeId: a.theme_id, label: String(a.label ?? a.theme_id) },
+              target: { themeId: b.theme_id, label: String(b.label ?? b.theme_id) },
+              reciprocal: graphDataset.edgeData[edge].reciprocal === true,
+            });
+          }
+          return;
+        }
+
+
         if (event.original.ctrlKey) {
           toggle({
             type: "edges",
@@ -1914,6 +1943,7 @@ export const EventsController: FC<EventsControllerProps> = ({
     onOpenContextSemantic,
     onOpenPostNote,
     onOpenSourceNote,
+    onOpenRelationNote,
     onCloseTransientPanels,
     onNodeActivatorReady,
     onExpandedThemeChange,
