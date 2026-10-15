@@ -1059,6 +1059,7 @@ export const EventsController: FC<EventsControllerProps> = ({
         resetHoveredNode();
       },
       async clickNode({ node, event }) {
+        if ("button" in event.original && event.original.button !== 0) return;
         await activateNode(
           node,
           event.original.ctrlKey,
@@ -1066,6 +1067,7 @@ export const EventsController: FC<EventsControllerProps> = ({
       },
 
       clickEdge({ edge, event }) {
+        if ("button" in event.original && event.original.button !== 0) return;
         if (suppressTouchTap()) return;
 
         if (
@@ -1105,10 +1107,38 @@ export const EventsController: FC<EventsControllerProps> = ({
           select({ type: "edges", items: new Set([edge]), replace: true });
         }
       },
+      rightClickNode({ node, event }) {
+        event.original.preventDefault();
+        if (!graphDataset.fullGraph.hasNode(node)) return;
+
+        select({
+          type: "nodes",
+          items: new Set([node]),
+          replace: true,
+        });
+      },
+
+      rightClickEdge({ edge, event }) {
+        event.original.preventDefault();
+        if (!graphDataset.fullGraph.hasEdge(edge)) return;
+
+        select({
+          type: "edges",
+          items: new Set([edge]),
+          replace: true,
+        });
+      },
+
+      rightClickStage({ event }) {
+        event.original.preventDefault();
+        emptySelection();
+      },
+
       doubleClick(event: MouseCoords) {
         event.preventSigmaDefault();
       },
       downNode: ({ node, event }) => {
+        if ("button" in event.original && event.original.button !== 0) return;
         const graph = sigma.getGraph();
         const nodes = selection.type === "nodes" && selection.items.has(node) ? Array.from(selection.items) : [node];
         const { x, y } = sigma.viewportToGraph(event);
@@ -1948,6 +1978,23 @@ export const EventsController: FC<EventsControllerProps> = ({
     onNodeActivatorReady,
     onExpandedThemeChange,
   ]);
+
+  // Désactiver le menu natif sur les canvases du graphe uniquement.
+  useEffect(() => {
+    const container = sigma.getContainer();
+
+    const preventGraphContextMenu = (event: MouseEvent) => {
+      if (event.target instanceof HTMLCanvasElement) {
+        event.preventDefault();
+      }
+    };
+
+    container.addEventListener("contextmenu", preventGraphContextMenu);
+
+    return () => {
+      container.removeEventListener("contextmenu", preventGraphContextMenu);
+    };
+  }, [sigma]);
 
   // DOM events not handled by sigma:
   useEffect(() => {
