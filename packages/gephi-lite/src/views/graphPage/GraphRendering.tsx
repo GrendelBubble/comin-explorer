@@ -41,6 +41,7 @@ import { SelectionController } from "./controllers/SelectionController";
 import { SettingsController } from "./controllers/SettingsController";
 import { TouchMagnifierController } from "./controllers/TouchMagnifierController";
 import { ContextSemanticReader } from "./ContextSemanticReader";
+import { RelationNoteReader, type RelationNoteItem } from "./RelationNoteReader";
 import {
   PostNoteReader,
   PostNoteReaderItem,
@@ -352,6 +353,7 @@ export const GraphRendering: FC<
     useState<CominContextSemanticNode | null>(null);
   const [postNoteItem, setPostNoteItem] =
     useState<PostNoteReaderItem | null>(null);
+  const [relationNoteItem, setRelationNoteItem] = useState<RelationNoteItem | null>(null);
   const [expandedThemeId, setExpandedThemeId] =
     useState<string | null>(null);
   const nodeActivatorRef = useRef<
@@ -396,6 +398,7 @@ export const GraphRendering: FC<
   const closeTransientPanels = useCallback(() => {
     setContextSemanticItem(null);
     setPostNoteItem(null);
+    setRelationNoteItem(null);
   }, []);
 
   return (
@@ -418,10 +421,12 @@ export const GraphRendering: FC<
       >
         <EventsController
           onOpenContextSemantic={(item) => {
+            setRelationNoteItem(null);
             setPostNoteItem(null);
             setContextSemanticItem(item);
           }}
           onOpenPostNote={(post: CominContextChildPostNode) => {
+            setRelationNoteItem(null);
             setContextSemanticItem(null);
             setPostNoteItem({
               postId: post.post_id,
@@ -430,6 +435,7 @@ export const GraphRendering: FC<
             });
           }}
           onOpenSourceNote={(source, postId) => {
+            setRelationNoteItem(null);
             setContextSemanticItem(null);
             setPostNoteItem({
               postId,
@@ -438,6 +444,11 @@ export const GraphRendering: FC<
               sourceId: source.source_id,
               isContainer: source.type === "container",
             });
+          }}
+          onOpenRelationNote={(relation) => {
+            setContextSemanticItem(null);
+            setPostNoteItem(null);
+            setRelationNoteItem(relation);
           }}
           onCloseTransientPanels={closeTransientPanels}
           onNodeActivatorReady={registerNodeActivator}
@@ -473,6 +484,24 @@ export const GraphRendering: FC<
         />
       )}
 
+      <RelationNoteReader
+        item={relationNoteItem}
+        onClose={() => setRelationNoteItem(null)}
+        onOpenContext={(item) => {
+          setRelationNoteItem(null);
+          setPostNoteItem(null);
+          setContextSemanticItem(item);
+        }}
+        onOpenPost={(item) => {
+          setRelationNoteItem(null);
+          setContextSemanticItem(null);
+          setPostNoteItem({
+            postId: item.post_id,
+            label: item.label,
+            url: item.url,
+          });
+        }}
+      />
       <ContextSemanticReader
         item={contextSemanticItem}
         onClose={() => setContextSemanticItem(null)}

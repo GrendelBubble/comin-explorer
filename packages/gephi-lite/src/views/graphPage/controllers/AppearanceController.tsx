@@ -846,15 +846,17 @@ export const AppearanceController: FC<
                       expandedThemeId
                   );
 
-                res.color =
-                  contextIsExpanded &&
-                  !touchesExpandedContext
-                    ? memoizedBrighten(
-                        COMIN_UI.edges.related.color,
-                      )
-                    : COMIN_UI.edges.related.color;
+                // Afficher uniquement les relations
+                // du contexte actuellement développé.
+                res.hidden =
+                  !contextIsExpanded ||
+                  !touchesExpandedContext;
 
-                res.size = COMIN_UI.edges.related.size;
+                res.color =
+                  COMIN_UI.edges.related.color;
+
+                res.size =
+                  COMIN_UI.edges.related.size;
               } else if (edgeType === "supported_by_post") {
                 res.color = COMIN_UI.edges.supportedByPost.color;
                 res.size = COMIN_UI.edges.supportedByPost.size;
