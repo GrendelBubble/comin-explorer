@@ -25,6 +25,9 @@ export const PostNoteReader: FC<PostNoteReaderProps> = ({
   const [note, setNote] =
     useState<CominPostNoteResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sourceId, setSourceId] = useState<number | null>(null);
+  const [sourceNote, setSourceNote] = useState<{ title: string; markdown: string; url: string } | null>(null);
+  const [sourceError, setSourceError] = useState<string | null>(null);
 
   useEffect(() => {
     if (item === null) {
@@ -36,6 +39,9 @@ export const PostNoteReader: FC<PostNoteReaderProps> = ({
     let cancelled = false;
 
     setNote(null);
+    setSourceId(null);
+    setSourceNote(null);
+    setSourceError(null);
     setError(null);
 
     fetchCominPostNote(item.postId)
@@ -66,6 +72,18 @@ export const PostNoteReader: FC<PostNoteReaderProps> = ({
       );
     };
   }, [item, onClose]);
+
+  useEffect(() => {
+    if (!item || sourceId === null) return;
+    let active = true;
+    setSourceNote(null);
+    setSourceError(null);
+    fetch(`/comin-api/graph/posts/${item.postId}/sources/${sourceId}/note`)
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then(data => { if (active) setSourceNote(data); })
+      .catch(e => { if (active) setSourceError(String(e)); });
+    return () => { active = false; };
+  }, [item, sourceId]);
 
   if (item === null) return null;
 
@@ -119,9 +137,9 @@ export const PostNoteReader: FC<PostNoteReaderProps> = ({
           ×
         </button>
 
-        <h1>{note?.title || item.label}</h1>
+        <h1>{sourceNote?.title || note?.title || item.label}</h1>
 
-        {item.url && (
+        {sourceId === null && item.url && (
           <p>
             <a
               href={item.url}
@@ -137,13 +155,36 @@ export const PostNoteReader: FC<PostNoteReaderProps> = ({
 
         {error && <p>{error}</p>}
 
-        {note && (
+        {sourceId !== null && (
+          <div className="mt-4">
+            <button type="button" onClick={() => { setSourceId(null); setSourceNote(null); setSourceError(null); }}>
+              ← Retour à la note du post
+            </button>
+            {!sourceNote && !sourceError && <p>Chargement…</p>}
+            {sourceError && <p>{sourceError}</p>}
+            {sourceNote && (
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {sourceNote.markdown}
+              </ReactMarkdown>
+            )}
+          </div>
+        )}
+
+        {sourceId === null && note && (
           <div className="mt-4">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
-                a: ({ children, ...props }) => (
+                a: ({ children, href, ...props }) => (
                   <a
+                    href={href}
+                    onClick={(event) => {
+                      const match = /^#comin-source-note-([0-9]+)$/.exec(href || "");
+                      if (match) {
+                        event.preventDefault();
+                        setSourceId(Number(match[1]));
+                      }
+                    }}
                     {...props}
                     target="_blank"
                     rel="noopener noreferrer"
