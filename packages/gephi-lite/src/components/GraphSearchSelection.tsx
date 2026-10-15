@@ -207,71 +207,61 @@ export const GraphSearchSelection: FC<
                 : [];
 
             /*
-             * On ne présente dans cette première version
-             * que les posts qui possèdent un chemin
-             * déterministe vers un contexte du graphe.
+             * Seules les correspondances propres au post
+             * justifient sa présence dans les résultats.
+             *
+             * title_posts : correspondance directe du titre.
+             * source_ids vide dans posts : contributions
+             * propres aux posts autonomes.
+             *
+             * Les posts rattachés à une source trouvée
+             * restent disponibles pour la navigation,
+             * sans devenir des résultats de recherche.
              */
-            const postTargets =
-              [...titlePosts, ...searchPosts.filter(
-                (post) => !titlePosts.some(
-                  (titlePost) => titlePost.post_id === post.post_id,
-                ),
-              )]
-                .map((post) => {
-                  const themeId =
-                    postToThemes.get(
-                      post.post_id,
-                    )?.[0];
+            const titlePostIds = new Set(
+              titlePosts.map((post) => post.post_id),
+            );
 
-                  if (!themeId) {
-                    return null;
-                  }
+            const ownContentPosts = searchPosts.filter(
+              (post) => post.source_ids.length === 0,
+            );
 
-                  const scores =
-                    contributionResponse.results
-                      .filter(
-                        (result) =>
-                          post.source_ids.includes(
-                            result.source_id,
-                          ),
-                      )
-                      .map(
-                        (result) =>
-                          result.score,
-                      );
+            const directPosts = [
+              ...titlePosts,
+              ...ownContentPosts.filter(
+                (post) => !titlePostIds.has(post.post_id),
+              ),
+            ];
 
-                  return {
-                    type:
-                      "post" as const,
-                    label:
-                      post.title,
-                    themeId,
-                    postId:
-                      post.post_id,
-                    score:
-                      titlePosts.some(
-                        (titlePost) => titlePost.post_id === post.post_id,
-                      )
-                        ? 1000
-                        : scores.length
-                          ? Math.max(...scores)
-                          : 0,
-                  };
-                })
-                .filter(
-                  (
-                    item,
-                  ): item is NonNullable<
-                    typeof item
-                  > =>
-                    item !== null,
-                )
-                .sort(
-                  (a, b) =>
-                    (b.score ?? 0) -
-                    (a.score ?? 0),
-                )
-                .slice(0, 10);
+            const postTargets = directPosts
+              .map((post) => {
+                const themeId =
+                  postToThemes.get(post.post_id)?.[0];
+
+                if (!themeId) return null;
+
+                const titleMatch =
+                  titlePostIds.has(post.post_id);
+
+                return {
+                  type: "post" as const,
+                  label: post.title,
+                  themeId,
+                  postId: post.post_id,
+                  score: titleMatch ? 1000 : 1,
+                  excerpt: titleMatch
+                    ? "Correspondance dans le titre du post."
+                    : "Correspondance dans les contributions propres au post.",
+                };
+              })
+              .filter(
+                (item): item is NonNullable<typeof item> =>
+                  item !== null,
+              )
+              .sort(
+                (a, b) => (b.score ?? 0) - (a.score ?? 0),
+              )
+              .slice(0, 10);
 
             /*
              * Une même source peut remonter plusieurs
