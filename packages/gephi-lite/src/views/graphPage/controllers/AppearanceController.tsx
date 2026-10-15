@@ -59,10 +59,26 @@ export const AppearanceController: FC<
     //  or
     //    the node selection,
     //    the hover node plus its neighbor
+    const selectedContextIds =
+      selection.type === "nodes"
+        ? new Set(
+            Array.from(selection.items).filter(
+              (nodeId) =>
+                graph.hasNode(nodeId) &&
+                nodeData[nodeId]?.type === "context",
+            ),
+          )
+        : new Set<string>();
+
     const allEmphasizedNodes =
       emphasizedNodes ||
       new Set([
         ...(selection.type === "nodes" ? Array.from(selection.items) : []),
+        ...Array.from(selectedContextIds).flatMap((nodeId) =>
+          graph.neighbors(nodeId).filter(
+            (neighborId) => nodeData[neighborId]?.type === "context",
+          ),
+        ),
         ...(hoveredNode ? [hoveredNode, ...graph.neighbors(hoveredNode)] : []),
       ]);
 
@@ -81,6 +97,11 @@ export const AppearanceController: FC<
       : emphasizedEdges ||
         new Set([
           ...(selection.type === "edges" ? Array.from(selection.items) : []),
+          ...Array.from(selectedContextIds).flatMap((nodeId) =>
+            graph.edges(nodeId).filter(
+              (edgeId) => edgeData[edgeId]?.type === "related",
+            ),
+          ),
           ...(hoveredNode ? graph.edges(hoveredNode) : []),
         ]);
     const hasEmphasizedNodes = !!allEmphasizedNodes.size;
@@ -606,6 +627,7 @@ export const AppearanceController: FC<
         nodeData[id]?.type === "context" &&
         nodeData[id]?.theme_id ===
           expandedThemeId;
+      const isSelectedContext = selectedContextIds.has(id);
       res.zIndex = 0;
 
       if (isCominGraph) {
@@ -613,7 +635,7 @@ export const AppearanceController: FC<
 
         if (nodeType === "context") {
           res.color =
-            contextIsExpanded && !isExpandedContext
+            contextIsExpanded && !isExpandedContext && !isSelectedContext
               ? memoizedBrighten(
                   COMIN_UI.nodes.context.color,
                 )
@@ -622,7 +644,8 @@ export const AppearanceController: FC<
 
           if (
             contextIsExpanded &&
-            !isExpandedContext
+            !isExpandedContext &&
+            !isSelectedContext
           ) {
             res.zIndex = -1;
           }
@@ -849,8 +872,11 @@ export const AppearanceController: FC<
                 // Afficher uniquement les relations
                 // du contexte actuellement développé.
                 res.hidden =
-                  !contextIsExpanded ||
-                  !touchesExpandedContext;
+                  selectedContextIds.size > 0
+                    ? !selectedContextIds.has(source) &&
+                      !selectedContextIds.has(target)
+                    : !contextIsExpanded ||
+                      !touchesExpandedContext;
 
                 res.color =
                   COMIN_UI.edges.related.color;
