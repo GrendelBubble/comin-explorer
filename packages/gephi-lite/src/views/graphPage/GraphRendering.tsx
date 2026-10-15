@@ -28,6 +28,7 @@ import {
   CominContextChildPostNode,
   CominContextSemanticNode,
 } from "../../core/comin/contextChildrenGraph";
+import { fetchCominContextChildrenGraph } from "../../core/comin/api";
 import type { CominDeepSearchTarget } from "../../core/comin/deepSearch";
 import { COMIN_UI } from "../../core/comin/uiPreset";
 import { GRAPH_SELECTION_MODES } from "../../core/selection/types";
@@ -356,6 +357,18 @@ export const GraphRendering: FC<
   const [relationNoteItem, setRelationNoteItem] = useState<RelationNoteItem | null>(null);
   const [expandedThemeId, setExpandedThemeId] =
     useState<string | null>(null);
+  const [isMobileTouch, setIsMobileTouch] = useState(
+    () => window.matchMedia("(pointer: coarse)").matches,
+  );
+  const [mobileReadError, setMobileReadError] =
+    useState<string | null>(null);
+
+  useEffect(() => {
+    const markTouch = () => setIsMobileTouch(true);
+    window.addEventListener("touchstart", markTouch, { passive: true });
+    return () => window.removeEventListener("touchstart", markTouch);
+  }, []);
+
   const nodeActivatorRef = useRef<
     ((nodeId: string) => void) | null
   >(null);
@@ -373,12 +386,21 @@ export const GraphRendering: FC<
 
   const activateNodeFromLabel = useCallback(
     (nodeId: string) => {
-      nodeActivatorRef.current?.(nodeId);
+      if (isMobileTouch) {
+        window.dispatchEvent(
+          new CustomEvent("comin-mobile-activate-node", {
+            detail: { nodeId },
+          }),
+        );
+      } else {
+        nodeActivatorRef.current?.(nodeId);
+      }
     },
-    [],
+    [isMobileTouch],
   );
   const { backgroundColor, layoutGridColor } = useAppearance();
-  const { nodeData } = useGraphDataset();
+  const { nodeData, edgeData, fullGraph } = useGraphDataset();
+  const selection = useSelection();
   const sigmaGraph = useSigmaGraph();
 
   const isCominGraph = Object.values(nodeData).some(
@@ -394,6 +416,148 @@ export const GraphRendering: FC<
   const setReady = useCallback(() => {
     setIsReady(true);
   }, [setIsReady]);
+
+  const selectedId =
+    selection.items.size === 1
+      ? Array.from(selection.items)[0]
+      : null;
+
+  const selectedNode =
+    selection.type === "nodes" && selectedId
+      ? nodeData[selectedId]
+      : null;
+
+  const selectedEdge =
+    selection.type === "edges" && selectedId
+      ? edgeData[selectedId]
+      : null;
+
+  const relationEndpoints =
+    selectedEdge?.type === "related" &&
+    selectedId &&
+    fullGraph.hasEdge(selectedId)
+      ? {
+          source: nodeData[fullGraph.source(selectedId)],
+          target: nodeData[fullGraph.target(selectedId)],
+        }
+      : null;
+
+  const validRelation =
+    relationEndpoints?.source?.type === "context" &&
+    relationEndpoints?.target?.type === "context";
+
+  const readableNode =
+    selectedNode &&
+    typeof selectedNode.type === "string" &&
+    [
+      "context",
+      "context_semantic",
+      "post",
+      "source",
+      "container",
+    ].includes(selectedNode.type);
+
+  const selectedLabel = selectedNode
+    ? String(selectedNode.label ?? "")
+    : validRelation && relationEndpoints
+      ? `${relationEndpoints.source.label} ↔ ${relationEndpoints.target.label}`
+      : "";
+
+  const readMobileSelection = async () => {
+    setMobileReadError(null);
+
+    if (selectedNode?.type === "context") {
+      const themeId = selectedNode.theme_id;
+      if (typeof themeId !== "string") return;
+
+      try {
+        const data = await fetchCominContextChildrenGraph(themeId);
+        const synthesis = data.nodes.find(
+          (node): node is CominContextSemanticNode =>
+            node.type === "context_semantic" &&
+            node.semantic_kind === "synthese",
+        );
+        if (!synthesis) throw new Error("Synthèse indisponible.");
+
+        setPostNoteItem(null);
+        setRelationNoteItem(null);
+        setContextSemanticItem(synthesis);
+      } catch {
+        setMobileReadError("Impossible de charger la synthèse.");
+      }
+      return;
+    }
+
+    if (selectedNode?.type === "context_semantic") {
+      setPostNoteItem(null);
+      setRelationNoteItem(null);
+      setContextSemanticItem(
+        selectedNode as unknown as CominContextSemanticNode,
+      );
+      return;
+    }
+
+    if (
+      selectedNode?.type === "post" &&
+      typeof selectedNode.post_id === "number"
+    ) {
+      setContextSemanticItem(null);
+      setRelationNoteItem(null);
+      setPostNoteItem({
+        postId: selectedNode.post_id,
+        label: String(selectedNode.label ?? ""),
+        url: typeof selectedNode.url === "string"
+          ? selectedNode.url : undefined,
+      });
+      return;
+    }
+
+    if (
+      selectedNode?.type === "source" ||
+      selectedNode?.type === "container"
+    ) {
+      const postId = Number(
+        (selectedNode as { cominPostId?: unknown }).cominPostId,
+      );
+      if (postId > 0) {
+        setContextSemanticItem(null);
+        setRelationNoteItem(null);
+        setPostNoteItem({
+          postId,
+          label: String(selectedNode.label ?? ""),
+          url: typeof selectedNode.url === "string"
+            ? selectedNode.url : undefined,
+          sourceId: selectedNode.type === "source"
+            ? Number(selectedNode.source_id) : undefined,
+          isContainer: selectedNode.type === "container",
+        });
+      } else {
+        setMobileReadError("Note de cette source indisponible.");
+      }
+      return;
+    }
+
+    if (
+      validRelation &&
+      relationEndpoints &&
+      typeof relationEndpoints.source.theme_id === "string" &&
+      typeof relationEndpoints.target.theme_id === "string"
+    ) {
+      setContextSemanticItem(null);
+      setPostNoteItem(null);
+      setRelationNoteItem({
+        source: {
+          themeId: relationEndpoints.source.theme_id,
+          label: String(relationEndpoints.source.label),
+        },
+        target: {
+          themeId: relationEndpoints.target.theme_id,
+          label: String(relationEndpoints.target.label),
+        },
+        reciprocal: selectedEdge?.reciprocal === true,
+      });
+    }
+  };
 
   const closeTransientPanels = useCallback(() => {
     setContextSemanticItem(null);
@@ -483,6 +647,54 @@ export const GraphRendering: FC<
           }
         />
       )}
+
+      {isMobileTouch &&
+        selectedId &&
+        (readableNode || validRelation) &&
+        !contextSemanticItem &&
+        !postNoteItem &&
+        !relationNoteItem && (
+          <div
+            role="region"
+            aria-label="Objet sélectionné"
+            className="position-fixed bg-body border rounded shadow p-2"
+            style={{
+              left: 8,
+              bottom: "calc(76px + env(safe-area-inset-bottom))",
+              maxWidth: "min(350px, calc(100vw - 85px))",
+              zIndex: 180,
+            }}
+          >
+            <div className="small fw-bold mb-2">
+              {selectedLabel}
+            </div>
+            <div className="d-flex flex-wrap align-items-center gap-2">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => { void readMobileSelection(); }}
+              >
+                Lire la note
+              </button>
+              {selectedNode?.type === "post" &&
+                typeof selectedNode.url === "string" && (
+                  <a
+                    href={selectedNode.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="small"
+                  >
+                    Voir sur Com’In
+                  </a>
+                )}
+            </div>
+            {mobileReadError && (
+              <p className="small text-danger mt-2 mb-0">
+                {mobileReadError}
+              </p>
+            )}
+          </div>
+        )}
 
       <RelationNoteReader
         item={relationNoteItem}
