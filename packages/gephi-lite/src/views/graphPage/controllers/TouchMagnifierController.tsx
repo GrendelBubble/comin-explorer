@@ -9,10 +9,7 @@ import {
 import { TouchCoords } from "sigma/types";
 import { createPortal } from "react-dom";
 
-import {
-  useGraphDataset,
-  useSigmaActions,
-} from "../../../core/context/dataContexts";
+import { useSigmaActions } from "../../../core/context/dataContexts";
 import { COMIN_UI } from "../../../core/comin/uiPreset";
 
 const LONG_PRESS_MS = 220;
@@ -44,7 +41,6 @@ type TouchState = {
 
 export const TouchMagnifierController: FC = () => {
   const sigma = useSigma();
-  const { nodeData } = useGraphDataset();
 
   const {
     setHoveredNode,
@@ -967,131 +963,21 @@ export const TouchMagnifierController: FC = () => {
           nodeId,
         );
 
-        const data =
-          nodeData[nodeId];
+        if (!sigma.getGraph().hasNode(nodeId)) return;
 
-        /*
-         * Pour une source, ouvrir directement
-         * depuis le vrai geste utilisateur.
-         * Cela évite les bloqueurs de pop-up.
-         */
-        if (
-          data?.type === "source" &&
-          typeof data.url ===
-            "string" &&
-          data.url
-        ) {
-          window.open(
-            data.url,
-            "_blank",
-            "noopener,noreferrer",
-          );
+        // Le choix dans la loupe explore sans ouvrir de note.
+        sigma.getContainer().dataset.cominSuppressTapUntil = "0";
 
-          clearLens();
-
-          return;
-        }
-
-        const graph =
-          sigma.getGraph();
-
-        if (
-          !graph.hasNode(nodeId)
-        ) {
-          return;
-        }
-
-        const attributes =
-          graph.getNodeAttributes(
-            nodeId,
-          );
-
-        const viewport =
-          sigma.graphToViewport({
-            x: attributes.x,
-            y: attributes.y,
-          });
-
-        const container =
-          sigma.getContainer();
-
-        const containerRect =
-          container.getBoundingClientRect();
-
-        /*
-         * Le tap d'origine doit rester inhibé,
-         * mais le clic explicitement demandé
-         * dans la loupe doit passer.
-         */
-        container.dataset
-          .cominSuppressTapUntil = "0";
-
-        /*
-         * On réinjecte un clic exactement au
-         * centre réel du nœud.
-         *
-         * EventsController conserve donc toutes
-         * les règles normales :
-         * - post -> Markdown
-         * - container -> ouvrir / fermer
-         * - contexte -> développer
-         * - contexte sémantique -> lecteur
-         */
-        const targetClientX =
-          containerRect.left +
-          viewport.x;
-
-        const targetClientY =
-          containerRect.top +
-          viewport.y;
-
-        /*
-         * La loupe est maintenant au-dessus du graphe.
-         * Pour retrouver la vraie couche Sigma située
-         * dessous, on la retire momentanément du
-         * hit-testing.
-         */
-        const previousPointerEvents =
-          lens.style.pointerEvents;
-
-        lens.style.pointerEvents =
-          "none";
-
-        const target =
-          document.elementFromPoint(
-            targetClientX,
-            targetClientY,
-          );
-
-        lens.style.pointerEvents =
-          previousPointerEvents;
-
-        const clickTarget =
-          target instanceof HTMLElement
-            ? target
-            : container;
-
-        clickTarget.dispatchEvent(
-          new MouseEvent(
-            "click",
-            {
-              bubbles: true,
-              cancelable: true,
-              view: window,
-              button: 0,
-              clientX:
-                targetClientX,
-              clientY:
-                targetClientY,
-            },
-          ),
+        window.dispatchEvent(
+          new CustomEvent("comin-mobile-activate-node", {
+            detail: { nodeId },
+          }),
         );
 
         clearLens();
       },
       [
         clearLens,
-        nodeData,
         pickNearestNode,
         setTouchHoveredNode,
         sigma,
@@ -1146,6 +1032,7 @@ export const TouchMagnifierController: FC = () => {
     const onTouchDown = (
       event: TouchCoords,
     ) => {
+      container.dataset.cominLastTouchAt = String(Date.now());
       if (
         event.touches.length !== 1
       ) {

@@ -654,6 +654,13 @@ export const EventsController: FC<EventsControllerProps> = ({
       return until > Date.now();
     };
 
+    const isRecentTouch = () => {
+      const timestamp = Number(
+        sigma.getContainer().dataset.cominLastTouchAt ?? 0,
+      );
+      return timestamp > 0 && Date.now() - timestamp < 1500;
+    };
+
     const closeMagnifier = () => {
       sigma
         .getContainer()
@@ -1082,15 +1089,26 @@ export const EventsController: FC<EventsControllerProps> = ({
       },
       async clickNode({ node, event }) {
         if ("button" in event.original && event.original.button !== 0) return;
+        const touch = isRecentTouch();
         await activateNode(
           node,
-          event.original.ctrlKey,
+          touch ? false : event.original.ctrlKey,
+          !touch,
         );
       },
 
       clickEdge({ edge, event }) {
         if ("button" in event.original && event.original.button !== 0) return;
         if (suppressTouchTap()) return;
+
+        if (isRecentTouch()) {
+          select({
+            type: "edges",
+            items: new Set([edge]),
+            replace: true,
+          });
+          return;
+        }
 
         if (
           !event.original.ctrlKey &&
@@ -1179,6 +1197,11 @@ export const EventsController: FC<EventsControllerProps> = ({
       },
       clickStage(e) {
         if (suppressTouchTap()) return;
+
+        if (isRecentTouch()) {
+          emptySelection();
+          return;
+        }
 
         // Ctrl reste réservé à la sélection multiple.
         if (e.event.original.ctrlKey) return;
@@ -1961,9 +1984,32 @@ export const EventsController: FC<EventsControllerProps> = ({
       }
     };
 
+    const onMobileActivateNode = (event: Event) => {
+      const nodeId = (
+        event as CustomEvent<{ nodeId: string }>
+      ).detail?.nodeId;
+
+      if (
+        typeof nodeId !== "string" ||
+        !graphDataset.fullGraph.hasNode(nodeId)
+      ) return;
+
+      dragEventsCountRef.current = 0;
+      void activateNode(nodeId, false, false);
+    };
+
+    window.addEventListener(
+      "comin-mobile-activate-node",
+      onMobileActivateNode,
+    );
+
     const unbind = bindUpHandler(upHandler);
     return () => {
       unbind();
+      window.removeEventListener(
+        "comin-mobile-activate-node",
+        onMobileActivateNode,
+      );
 
       window.removeEventListener(
         "comin-reveal-search-target",
