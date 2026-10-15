@@ -667,27 +667,45 @@ export const EventsController: FC<EventsControllerProps> = ({
     const activateNode = async (
       node: string,
       ctrlKey = false,
-      openContextNote = true,
+      openNote = true,
     ) => {
         if (suppressTouchTap()) return;
         if (dragEventsCountRef.current >= DRAG_EVENTS_TOLERANCE) return;
 
         const nodeData = graphDataset.nodeData[node];
 
-        if (nodeData?.type === "context_semantic") {
-          closeMagnifier();
+        if (
+          !openNote &&
+          (
+            nodeData?.type === "context_semantic" ||
+            nodeData?.type === "source" ||
+            nodeData?.type === "container"
+          )
+        ) {
+          select({
+            type: "nodes",
+            items: new Set([node]),
+            replace: true,
+          });
+        }
 
-          onOpenContextSemantic(
-            nodeData as unknown as CominContextSemanticNode,
-          );
+        if (nodeData?.type === "context_semantic") {
+          if (openNote) {
+            closeMagnifier();
+            onOpenContextSemantic(
+              nodeData as unknown as CominContextSemanticNode,
+            );
+          }
           return;
         }
 
         if (nodeData?.type === "source" || nodeData?.type === "container") {
           const postId = Number((nodeData as { cominPostId?: number }).cominPostId);
           if (postId > 0) {
-            closeMagnifier();
-            onOpenSourceNote(nodeData as unknown as CominPostSourceNode, postId);
+            if (openNote) {
+              closeMagnifier();
+              onOpenSourceNote(nodeData as unknown as CominPostSourceNode, postId);
+            }
             if (nodeData.type === "container") await toggleContainer(node, postId);
           }
           return;
@@ -699,6 +717,7 @@ export const EventsController: FC<EventsControllerProps> = ({
             item: node,
           });
         } else if (
+          openNote &&
           selection.type === "nodes" &&
           selection.items.has(node) &&
           selection.items.size === 1
@@ -746,9 +765,11 @@ export const EventsController: FC<EventsControllerProps> = ({
 
           closeMagnifier();
 
-          onOpenPostNote(
-            nodeData as unknown as CominContextChildPostNode,
-          );
+          if (openNote) {
+            onOpenPostNote(
+              nodeData as unknown as CominContextChildPostNode,
+            );
+          }
 
           return;
         }
@@ -758,12 +779,13 @@ export const EventsController: FC<EventsControllerProps> = ({
         const themeId = nodeData.theme_id;
         if (typeof themeId !== "string") return;
         if (expandedThemesRef.current.has(themeId)) {
+          if (!openNote) return;
           const data = await fetchCominContextChildrenGraph(themeId);
           const synthesis = data.nodes.find(
             (entry): entry is CominContextSemanticNode => entry.type === "context_semantic" &&
               entry.semantic_kind === "synthese",
           );
-          if (synthesis && openContextNote) onOpenContextSemantic(synthesis);
+          if (synthesis && openNote) onOpenContextSemantic(synthesis);
           return;
         }
 
@@ -807,7 +829,7 @@ export const EventsController: FC<EventsControllerProps> = ({
             (entry): entry is CominContextSemanticNode => entry.type === "context_semantic" &&
               entry.semantic_kind === "synthese",
           );
-          if (synthesis && openContextNote) onOpenContextSemantic(synthesis);
+          if (synthesis && openNote) onOpenContextSemantic(synthesis);
 
 
           const center =
@@ -1107,15 +1129,12 @@ export const EventsController: FC<EventsControllerProps> = ({
           select({ type: "edges", items: new Set([edge]), replace: true });
         }
       },
-      rightClickNode({ node, event }) {
+      async rightClickNode({ node, event }) {
         event.original.preventDefault();
         if (!graphDataset.fullGraph.hasNode(node)) return;
 
-        select({
-          type: "nodes",
-          items: new Set([node]),
-          replace: true,
-        });
+        dragEventsCountRef.current = 0;
+        await activateNode(node, false, false);
       },
 
       rightClickEdge({ edge, event }) {
