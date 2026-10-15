@@ -505,10 +505,23 @@ export const GraphRendering: FC<
       <ContextSemanticReader
         item={contextSemanticItem}
         onClose={() => setContextSemanticItem(null)}
+        onOpenPost={(post) => {
+          setPostNoteItem({
+            postId: post.post_id,
+            label: post.label,
+            url: post.url,
+            returnContext: contextSemanticItem ?? undefined,
+          });
+          setContextSemanticItem(null);
+        }}
       />
       <PostNoteReader
         item={postNoteItem}
         onClose={() => setPostNoteItem(null)}
+        onReturnToContext={(context) => {
+          setPostNoteItem(null);
+          setContextSemanticItem(context);
+        }}
       />
     </>
   );

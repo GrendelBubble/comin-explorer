@@ -10,6 +10,7 @@ import {
 } from "../../core/comin/api";
 
 import type { CominPostSourceNode } from "../../core/comin/postSourcesGraph";
+import type { CominContextSemanticNode } from "../../core/comin/contextChildrenGraph";
 
 export interface PostNoteReaderItem {
   postId: number;
@@ -17,16 +18,19 @@ export interface PostNoteReaderItem {
   url?: string;
   sourceId?: number;
   isContainer?: boolean;
+  returnContext?: CominContextSemanticNode;
 }
 
 interface PostNoteReaderProps {
   item: PostNoteReaderItem | null;
   onClose: () => void;
+  onReturnToContext?: (context: CominContextSemanticNode) => void;
 }
 
 export const PostNoteReader: FC<PostNoteReaderProps> = ({
   item,
   onClose,
+  onReturnToContext,
 }) => {
   const [note, setNote] =
     useState<CominPostNoteResponse | null>(null);
@@ -128,6 +132,21 @@ export const PostNoteReader: FC<PostNoteReaderProps> = ({
   return (
     <NoteReaderFrame label={item.label} onClose={onClose}>
         <h1>{sourceId !== null ? sourceNote?.title || item.label : item.isContainer ? item.label : note?.title || item.label}</h1>
+
+        {item.returnContext && onReturnToContext && (
+          <p>
+            <button
+              type="button"
+              className="btn btn-link p-0"
+              onClick={() => {
+                if (item.returnContext)
+                  onReturnToContext(item.returnContext);
+              }}
+            >
+              ← Retour à la synthèse
+            </button>
+          </p>
+        )}
 
         {sourceId === null && item.url && (
           <p>
